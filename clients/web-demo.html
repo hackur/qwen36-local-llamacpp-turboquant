@@ -2,23 +2,40 @@
 <html lang="en"><head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Qwen 3.6 Local — offline chat</title>
+<title>Qwen 3.6 · offline</title>
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: dark; --bg:#0a0a0a; --panel:#111; --border:#222; --accent:#3b82f6; --user:#1b2738; --ai:#162018; --muted:#888; --code:#1e1e22; }
   * { box-sizing: border-box; }
-  body { margin: 0; background:#0a0a0a; color:#eee; font:15px/1.45 ui-sans-serif,system-ui; height:100vh; display:flex; flex-direction:column; }
-  header { padding:10px 16px; border-bottom:1px solid #222; display:flex; gap:12px; align-items:center; }
+  body { margin:0; background:var(--bg); color:#eee; font:15px/1.5 ui-sans-serif,system-ui; height:100vh; display:flex; flex-direction:column; }
+  header { padding:10px 16px; border-bottom:1px solid var(--border); display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
   header strong { font-weight:600; }
-  select, input { background:#111; color:#eee; border:1px solid #333; padding:6px 8px; border-radius:6px; font:inherit; }
-  #chat { flex:1; overflow:auto; padding:16px; max-width:900px; width:100%; margin:0 auto; }
-  .msg { margin:0 0 14px; padding:10px 12px; border-radius:10px; white-space:pre-wrap; }
-  .user { background:#1b2738; }
-  .assistant { background:#162018; }
-  .meta { color:#888; font-size:12px; margin-top:4px; }
-  form { display:flex; gap:8px; padding:12px; border-top:1px solid #222; max-width:900px; margin:0 auto; width:100%; }
-  form input { flex:1; }
-  button { background:#3b82f6; border:0; color:white; padding:8px 14px; border-radius:6px; cursor:pointer; font:inherit; }
+  select, input, button { background:var(--panel); color:#eee; border:1px solid #333; padding:6px 9px; border-radius:6px; font:inherit; }
+  button { cursor:pointer; }
+  button.primary { background:var(--accent); border-color:transparent; color:#fff; }
   button:disabled { opacity:.5; cursor:not-allowed; }
+  #chat { flex:1; overflow:auto; padding:16px; max-width:900px; width:100%; margin:0 auto; }
+  .msg { margin:0 0 14px; padding:10px 14px; border-radius:10px; }
+  .user { background:var(--user); }
+  .assistant { background:var(--ai); }
+  .meta { color:var(--muted); font-size:12px; margin-top:6px; }
+  .meta b { color:#bbb; font-weight:500; }
+  form { display:flex; gap:8px; padding:12px; border-top:1px solid var(--border); max-width:900px; margin:0 auto; width:100%; }
+  form input { flex:1; }
+  details.settings { padding:8px 14px; border-bottom:1px solid var(--border); background:#0d0d0d; }
+  details.settings summary { cursor:pointer; color:var(--muted); user-select:none; }
+  details.settings .grid { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; padding:10px 0 4px; align-items:center; max-width:600px; }
+  /* tiny markdown */
+  .assistant pre { background:var(--code); padding:10px 12px; border-radius:6px; overflow-x:auto; margin:8px 0; }
+  .assistant code { background:var(--code); padding:1px 5px; border-radius:4px; font-size:13px; }
+  .assistant pre code { background:transparent; padding:0; }
+  .assistant ul, .assistant ol { padding-left:22px; margin:6px 0; }
+  .assistant h1,.assistant h2,.assistant h3 { margin:10px 0 4px; }
+  .assistant blockquote { border-left:3px solid #333; margin:6px 0; padding:0 10px; color:#bbb; }
+  .assistant hr { border:0; border-top:1px solid #333; margin:10px 0; }
+  .assistant a { color:var(--accent); }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#1a2538; font-size:11px; color:#a4b8d6; }
+  .pill.up { background:#143324; color:#7fd0a3; }
+  .pill.down { background:#3b1e1e; color:#e89090; }
 </style>
 </head><body>
 <header>
@@ -28,14 +45,33 @@
     <option value="10500">:10500 baseline (f16)</option>
     <option value="10501" selected>:10501 turboquant</option>
     <option value="10502">:10502 fallback (q8_0)</option>
+    <option value="10503">:10503 vision</option>
   </select>
-  <span id="status" class="meta">checking…</span>
+  <span id="status" class="pill">checking…</span>
+  <button id="clear">clear</button>
 </header>
+
+<details class="settings">
+  <summary>settings</summary>
+  <div class="grid">
+    <label for="thinking">enable_thinking</label>
+    <input id="thinking" type="checkbox" />
+    <label for="maxtok">max_tokens</label>
+    <input id="maxtok" type="number" value="1024" min="1" max="32000" />
+    <label for="temp">temperature</label>
+    <input id="temp" type="number" value="0.6" step="0.1" min="0" max="2" />
+    <label for="topp">top_p</label>
+    <input id="topp" type="number" value="0.95" step="0.05" min="0" max="1" />
+  </div>
+</details>
+
 <div id="chat"></div>
+
 <form id="f">
   <input id="q" autocomplete="off" placeholder="ask anything (offline)…" />
-  <button id="send">send</button>
+  <button id="send" class="primary">send</button>
 </form>
+
 <script>
 const chat = document.getElementById('chat');
 const portSel = document.getElementById('port');
@@ -43,27 +79,76 @@ const statusEl = document.getElementById('status');
 const form = document.getElementById('f');
 const input = document.getElementById('q');
 const sendBtn = document.getElementById('send');
+const clearBtn = document.getElementById('clear');
+const thinkingEl = document.getElementById('thinking');
+const maxTokEl = document.getElementById('maxtok');
+const tempEl = document.getElementById('temp');
+const toppEl = document.getElementById('topp');
 const history = [];
 
 async function ping() {
   const port = portSel.value;
   try {
     const r = await fetch(`http://127.0.0.1:${port}/health`);
-    statusEl.textContent = r.ok ? `:${port} up` : `:${port} ${r.status}`;
-  } catch { statusEl.textContent = `:${port} offline`; }
+    if (r.ok) {
+      statusEl.textContent = `:${port} up`;
+      statusEl.className = 'pill up';
+    } else {
+      statusEl.textContent = `:${port} ${r.status}`;
+      statusEl.className = 'pill down';
+    }
+  } catch {
+    statusEl.textContent = `:${port} offline`;
+    statusEl.className = 'pill down';
+  }
 }
 portSel.onchange = ping; ping(); setInterval(ping, 5000);
 
-function append(role, text) {
+clearBtn.onclick = () => { chat.innerHTML = ''; history.length = 0; };
+
+// Tiny markdown renderer (no deps; covers what Qwen tends to emit)
+function md(text) {
+  // escape HTML
+  let s = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // fenced code blocks
+  s = s.replace(/```(\w*)\n([\s\S]*?)```/g, (_, l, c) => `<pre><code class="lang-${l}">${c}</code></pre>`);
+  // inline code
+  s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  // headers
+  s = s.replace(/^###\s+(.*)$/gm, '<h3>$1</h3>')
+       .replace(/^##\s+(.*)$/gm,  '<h2>$1</h2>')
+       .replace(/^#\s+(.*)$/gm,   '<h1>$1</h1>');
+  // bold and italic
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+  s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+  // links
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  // unordered lists (group consecutive lines)
+  s = s.replace(/(?:^[-*]\s+.*(?:\n|$))+?/gm, m =>
+    '<ul>' + m.trim().split('\n').map(li => '<li>' + li.replace(/^[-*]\s+/, '') + '</li>').join('') + '</ul>');
+  // ordered lists
+  s = s.replace(/(?:^\d+\.\s+.*(?:\n|$))+?/gm, m =>
+    '<ol>' + m.trim().split('\n').map(li => '<li>' + li.replace(/^\d+\.\s+/, '') + '</li>').join('') + '</ol>');
+  // blockquote
+  s = s.replace(/^>\s+(.*)$/gm, '<blockquote>$1</blockquote>');
+  // horizontal rule
+  s = s.replace(/^---+$/gm, '<hr/>');
+  // paragraph breaks
+  s = s.replace(/\n{2,}/g, '\n<br/>\n');
+  return s;
+}
+
+function append(role) {
   const div = document.createElement('div');
   div.className = `msg ${role}`;
-  div.textContent = text;
+  const body = document.createElement('div');
+  body.className = 'body';
   const meta = document.createElement('div');
   meta.className = 'meta';
-  div.appendChild(meta);
+  div.appendChild(body); div.appendChild(meta);
   chat.appendChild(div);
   chat.scrollTop = chat.scrollHeight;
-  return { div, meta };
+  return { body, meta };
 }
 
 form.onsubmit = async (e) => {
@@ -72,44 +157,57 @@ form.onsubmit = async (e) => {
   if (!q) return;
   input.value = ''; sendBtn.disabled = true;
   history.push({ role: 'user', content: q });
-  append('user', q);
-  const { div, meta } = append('assistant', '');
+  const u = append('user'); u.body.textContent = q;
+  const a = append('assistant');
   const t0 = performance.now();
-  let nTok = 0;
+  let nWords = 0;
 
   const port = portSel.value;
-  const r = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'local', stream: true, messages: history, max_tokens: 1024 }),
-  });
-  const reader = r.body.getReader();
-  const dec = new TextDecoder();
-  let buf = '', acc = '';
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const lines = buf.split('\n'); buf = lines.pop();
-    for (const ln of lines) {
-      if (!ln.startsWith('data: ')) continue;
-      const data = ln.slice(6).trim();
-      if (data === '[DONE]') continue;
-      try {
-        const j = JSON.parse(data);
-        const piece = j.choices?.[0]?.delta?.content || '';
-        if (piece) {
-          acc += piece;
-          div.firstChild ? (div.firstChild.textContent = acc) : (div.textContent = acc);
-          if (!div.contains(meta)) div.appendChild(meta);
-          nTok += piece.split(/\s+/).length;
-          const dt = (performance.now() - t0) / 1000;
-          meta.textContent = `~${(nTok/dt).toFixed(1)} word/s`;
-        }
-      } catch {}
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'local',
+        stream: true,
+        messages: history,
+        max_tokens: parseInt(maxTokEl.value) || 1024,
+        temperature: parseFloat(tempEl.value) || 0.6,
+        top_p: parseFloat(toppEl.value) || 0.95,
+        chat_template_kwargs: { enable_thinking: thinkingEl.checked },
+      }),
+    });
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '', acc = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n'); buf = lines.pop();
+      for (const ln of lines) {
+        if (!ln.startsWith('data: ')) continue;
+        const data = ln.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const j = JSON.parse(data);
+          const piece = j.choices?.[0]?.delta?.content || '';
+          if (piece) {
+            acc += piece;
+            a.body.innerHTML = md(acc);
+            nWords += piece.split(/\s+/).length;
+            const dt = (performance.now() - t0) / 1000;
+            a.meta.innerHTML = `<b>~${(nWords/dt).toFixed(1)} word/s</b> · ${(dt).toFixed(1)}s`;
+            chat.scrollTop = chat.scrollHeight;
+          }
+        } catch {}
+      }
     }
+    history.push({ role: 'assistant', content: acc });
+  } catch (e) {
+    a.body.textContent = `error: ${e}`;
+    a.meta.textContent = '(server may be down)';
   }
-  history.push({ role: 'assistant', content: acc });
   sendBtn.disabled = false;
   input.focus();
 };

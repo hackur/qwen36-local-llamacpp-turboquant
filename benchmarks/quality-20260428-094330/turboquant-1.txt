@@ -1,0 +1,36 @@
+To solve the expression $23 \times 47 + 18$, we must follow the order of operations (PEMDAS/BODMAS), which dictates that multiplication is performed before addition.
+
+**Step 1: Perform the multiplication ($23 \times 47$)**
+
+We can calculate this using standard long multiplication or by breaking it down:
+
+$$
+\begin{array}{r}
+  47 \\
+\times 23 \\
+\hline
+  141 & (3 \times 47) \\
++ 940 & (20 \times 47) \\
+\hline
+ 1081
+\end{array}
+$$
+
+So, $23 \times 47 = 1081$.
+
+**Step 2: Perform the addition ($1081 + 18$)**
+
+Now, add 18 to the result from Step 1:
+
+$$
+\begin{array}{r}
+  1081 \\
++ \quad 18 \\
+\hline
+  1099
+\end{array}
+$$
+
+**Final Conclusion:**
+
+$$ 23 \times 47 + 18 = 1099 $$

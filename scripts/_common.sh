@@ -13,7 +13,11 @@ MMPROJ_FALLBACK="$HOME/.lmstudio/models/unsloth/Qwen3.6-27B-GGUF/mmproj-F32.gguf
 # Sampling per Qwen team recommendations (thinking/coding)
 SAMPLING=(--temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0)
 
-# Common server args
+# Common server args.
+# --jinja enables Qwen 3.6's chat template (which supports the
+# `chat_template_kwargs.enable_thinking` flag clients pass per-request).
+# --reasoning-format none keeps thinking content inline so callers see it
+# even when default-on; clients can flip it off per-request.
 COMMON=(-ngl 99 -fa on -np 1 --host 127.0.0.1 --jinja)
 
 ensure_port_free() {

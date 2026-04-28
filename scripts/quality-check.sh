@@ -22,8 +22,8 @@ run_one() {
     i=$((i+1))
     echo "[$i] $p"
     resp=$(curl -sf "http://127.0.0.1:$port/v1/chat/completions" -H "Content-Type: application/json" \
-      -d "$(jq -nc --arg p "$p" '{model:"local",messages:[{role:"user",content:$p}],max_tokens:300,temperature:0.6}')")
-    out=$(echo "$resp" | jq -r '.choices[0].message.content')
+      -d "$(jq -nc --arg p "$p" '{model:"local",messages:[{role:"user",content:$p}],max_tokens:600,temperature:0.6,chat_template_kwargs:{enable_thinking:false}}')")
+    out=$(echo "$resp" | python3 -c "import sys,json; r=json.load(sys.stdin,strict=False); print(r['choices'][0]['message']['content'])")
     echo "$out" | tee "$OUT/$tag-$i.txt"
     echo
   done

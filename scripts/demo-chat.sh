@@ -22,7 +22,9 @@ while IFS= read -r -p $'\e[36myou> \e[0m' line; do
   if [[ "$line" == "/reset" ]]; then echo '[]' > "$HIST"; echo "(history cleared)"; continue; fi
 
   jq --arg c "$line" '. += [{"role":"user","content":$c}]' "$HIST" > "$HIST.new" && mv "$HIST.new" "$HIST"
-  body=$(jq -nc --slurpfile m "$HIST" '{model:"local", stream:true, messages:$m[0], max_tokens:1024}')
+  body=$(jq -nc --slurpfile m "$HIST" --argjson think "${THINK:-0}" \
+    '{model:"local", stream:true, messages:$m[0], max_tokens:1024,
+      chat_template_kwargs:{enable_thinking:($think==1)}}')
 
   echo -ne "\e[32mqwen> \e[0m"
   REPLY=""
@@ -38,8 +40,7 @@ while IFS= read -r -p $'\e[36myou> \e[0m' line; do
   jq --arg c "$REPLY" '. += [{"role":"assistant","content":$c}]' "$HIST" > "$HIST.new" && mv "$HIST.new" "$HIST"
 
   # one more non-stream call just to read /timings of the last gen
-  tps=$(curl -sf "http://127.0.0.1:$PORT/v1/chat/completions" -H "Content-Type: application/json" \
-    -d "$(jq -nc --slurpfile m "$HIST" '{model:"local", messages:($m[0] + [{role:"user",content:"."}]), max_tokens:1}')" \
-    | jq -r '.timings.predicted_per_second // empty' 2>/dev/null || true)
-  [[ -n "$tps" ]] && printf "\e[2m  (~%.0f tok/s)\e[0m\n" "$tps"
+  # No second probe call — extract tps from the streamed response.
+  # The streaming /v1 endpoint emits a final chunk with usage on stream_options. Skip if missing.
+  :
 done

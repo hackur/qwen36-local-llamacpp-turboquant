@@ -1,0 +1,9 @@
+{
+  "_comment": "Canonical Qwen 3.6 sampling per the Qwen team. Used by all start scripts.",
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "repetition_penalty": 1.0
+}

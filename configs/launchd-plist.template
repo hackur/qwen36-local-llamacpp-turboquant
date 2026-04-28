@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>           <string>com.local.qwen3-6.turboquant</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__REPO__/scripts/start-turboquant.sh</string>
+  </array>
+  <key>RunAtLoad</key>       <true/>
+  <key>KeepAlive</key>       <true/>
+  <key>StandardOutPath</key> <string>__REPO__/logs/launchd.out</string>
+  <key>StandardErrorPath</key><string>__REPO__/logs/launchd.err</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>TURBO_LAYER_ADAPTIVE</key><string>1</string>
+  </dict>
+</dict>
+</plist>
+
+<!--
+Install:
+  sed "s|__REPO__|$(pwd)|g" configs/launchd-plist.template > ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
+  launchctl load ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
+
+Uninstall:
+  launchctl unload ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
+  rm ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
+-->

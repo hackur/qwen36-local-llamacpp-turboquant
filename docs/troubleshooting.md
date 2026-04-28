@@ -1,0 +1,64 @@
+# Troubleshooting
+
+## Build
+
+### "No CMAKE_C_COMPILER could be found"
+Run `xcode-select --install` and re-run `scripts/build-llama.sh`.
+
+### Metal shader compile errors
+`xcode-select -p` must point at a real Xcode (not just CLT) for Metal shader compilation. If `cmake -DGGML_METAL=ON` reports "Metal shader compiler not found":
+```bash
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+```
+
+### TurboQuant fork builds but no `turbo[234]` in `--help`
+```bash
+vendor/llama-cpp-turboquant/build/bin/llama-server -h | grep -E 'turbo|cache.type'
+```
+- If empty, the wrong branch was checked out. The TurboQuant code lives on `feature/turboquant-kv-cache`, **not `master`**. The build script clones with `--branch feature/turboquant-kv-cache --depth 1`. Verify:
+  ```bash
+  cd vendor/llama-cpp-turboquant && git rev-parse --abbrev-ref HEAD
+  ```
+- If the binary exists but the flag is unknown at runtime (`Unsupported cache type: turbo3`), the TurboQuant kernels likely didn't compile for Metal — fall back to `-ctk q8_0 -ctv q8_0` via `scripts/start-fallback.sh`.
+
+## Server won't start
+
+### `address already in use`
+LM Studio's default server is on **:1234**. We use **:10500/10501/10502**. If something already holds those:
+```bash
+lsof -nP -iTCP:10501 -sTCP:LISTEN
+```
+Kill the holder or set `PORT=10503 ./scripts/start-turboquant.sh`.
+
+### Model file not found
+Open LM Studio → Models, confirm the GGUF is downloaded. Or override:
+```bash
+MODEL=/some/other/path.gguf ./scripts/start-baseline.sh
+```
+
+## Runtime
+
+### Tok/s is half what was advertised
+- macOS Activity Monitor → Energy → confirm power source. Plugged-in M3 Max scores ~30% better than on-battery.
+- Other GPU work in flight (Final Cut, video calls) steals Metal time.
+- Confirm `-ngl 99` (all layers on GPU). With 0, llama.cpp runs CPU-only.
+- Confirm `-fa on` (flash attention) — without it, prompt-eval drops a lot.
+
+### "Prompt too long" at 100K tokens
+- Confirm the server was started with `-c 131072` (default in `start-turboquant.sh`).
+- If the build ran out of memory allocating the KV cache at start, it would have logged "ggml_metal: failed to allocate buffer". Reduce `-c` or use a smaller KV type.
+
+### Quality regression on TurboQuant vs baseline
+Run `scripts/quality-check.sh` and diff outputs. turbo3 trades some bits for context — if a prompt is sensitive to recall fidelity, route it to baseline (port 10500).
+
+## Five known errors from the upstream guide
+
+These come from the iflow-mcp + Hugging Face TurboQuant guide. Most are CUDA-specific; we still get bitten by the first two in spirit:
+
+| # | Symptom | Cause | Fix |
+|---|---|---|---|
+| E1 | `llama-server -h \| grep turbo` empty | Wrong repo (`turboquant_plus` is a Python lib) | Use `TheTom/llama-cpp-turboquant` |
+| E2 | Build succeeds but inference is slow | Old cmake flag `-DLLAMA_CUBLAS=ON` silently ignored | Use `-DGGML_METAL=ON` (we already do) |
+| E3 | Linker error on `libcuda.so.1` | n/a on macOS | n/a |
+| E4 | `Unsupported cache type: turbo3` | Wrong branch (`master` has no TurboQuant) | Clone `--branch feature/turboquant-kv-cache` |
+| E5 | 404 on model download | HF repo renamed | We don't download — we re-use LM Studio's local files |

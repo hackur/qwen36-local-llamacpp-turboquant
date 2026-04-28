@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Qwen 3.6 Local — offline chat</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background:#0a0a0a; color:#eee; font:15px/1.45 ui-sans-serif,system-ui; height:100vh; display:flex; flex-direction:column; }
+  header { padding:10px 16px; border-bottom:1px solid #222; display:flex; gap:12px; align-items:center; }
+  header strong { font-weight:600; }
+  select, input { background:#111; color:#eee; border:1px solid #333; padding:6px 8px; border-radius:6px; font:inherit; }
+  #chat { flex:1; overflow:auto; padding:16px; max-width:900px; width:100%; margin:0 auto; }
+  .msg { margin:0 0 14px; padding:10px 12px; border-radius:10px; white-space:pre-wrap; }
+  .user { background:#1b2738; }
+  .assistant { background:#162018; }
+  .meta { color:#888; font-size:12px; margin-top:4px; }
+  form { display:flex; gap:8px; padding:12px; border-top:1px solid #222; max-width:900px; margin:0 auto; width:100%; }
+  form input { flex:1; }
+  button { background:#3b82f6; border:0; color:white; padding:8px 14px; border-radius:6px; cursor:pointer; font:inherit; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+</style>
+</head><body>
+<header>
+  <strong>Qwen 3.6 · local</strong>
+  <span>endpoint:</span>
+  <select id="port">
+    <option value="10500">:10500 baseline (f16)</option>
+    <option value="10501" selected>:10501 turboquant</option>
+    <option value="10502">:10502 fallback (q8_0)</option>
+  </select>
+  <span id="status" class="meta">checking…</span>
+</header>
+<div id="chat"></div>
+<form id="f">
+  <input id="q" autocomplete="off" placeholder="ask anything (offline)…" />
+  <button id="send">send</button>
+</form>
+<script>
+const chat = document.getElementById('chat');
+const portSel = document.getElementById('port');
+const statusEl = document.getElementById('status');
+const form = document.getElementById('f');
+const input = document.getElementById('q');
+const sendBtn = document.getElementById('send');
+const history = [];
+
+async function ping() {
+  const port = portSel.value;
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/health`);
+    statusEl.textContent = r.ok ? `:${port} up` : `:${port} ${r.status}`;
+  } catch { statusEl.textContent = `:${port} offline`; }
+}
+portSel.onchange = ping; ping(); setInterval(ping, 5000);
+
+function append(role, text) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.textContent = text;
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  div.appendChild(meta);
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return { div, meta };
+}
+
+form.onsubmit = async (e) => {
+  e.preventDefault();
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = ''; sendBtn.disabled = true;
+  history.push({ role: 'user', content: q });
+  append('user', q);
+  const { div, meta } = append('assistant', '');
+  const t0 = performance.now();
+  let nTok = 0;
+
+  const port = portSel.value;
+  const r = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'local', stream: true, messages: history, max_tokens: 1024 }),
+  });
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '', acc = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split('\n'); buf = lines.pop();
+    for (const ln of lines) {
+      if (!ln.startsWith('data: ')) continue;
+      const data = ln.slice(6).trim();
+      if (data === '[DONE]') continue;
+      try {
+        const j = JSON.parse(data);
+        const piece = j.choices?.[0]?.delta?.content || '';
+        if (piece) {
+          acc += piece;
+          div.firstChild ? (div.firstChild.textContent = acc) : (div.textContent = acc);
+          if (!div.contains(meta)) div.appendChild(meta);
+          nTok += piece.split(/\s+/).length;
+          const dt = (performance.now() - t0) / 1000;
+          meta.textContent = `~${(nTok/dt).toFixed(1)} word/s`;
+        }
+      } catch {}
+    }
+  }
+  history.push({ role: 'assistant', content: acc });
+  sendBtn.disabled = false;
+  input.focus();
+};
+</script>
+</body></html>

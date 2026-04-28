@@ -1,0 +1,8 @@
+vendor/
+logs/
+benchmarks/results-*.json
+benchmarks/mem-*.csv
+*.gguf
+.DS_Store
+.venv/
+__pycache__/

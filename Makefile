@@ -24,8 +24,14 @@ start-baseline: ## Start mainline f16 baseline (port 10500)
 stop: ## Stop all llama-server processes from this repo
 	./scripts/stop-all.sh
 
-status: ## What's running and where
+status: ## What's running and where (terse)
 	./scripts/status.sh
+
+info: ## Full one-shot info dashboard (env, server, memory, network, disk, launchd, last bench)
+	./scripts/info.sh
+
+info-watch: ## Same as `info`, refreshing every 2 s
+	./scripts/info.sh --watch
 
 bench: ## Run A/B benchmark (assumes both servers up)
 	python3 scripts/bench.py 10500 "baseline" || true

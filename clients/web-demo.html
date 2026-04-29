@@ -36,6 +36,20 @@
   .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#1a2538; font-size:11px; color:#a4b8d6; }
   .pill.up { background:#143324; color:#7fd0a3; }
   .pill.down { background:#3b1e1e; color:#e89090; }
+  .pill.busy { background:#3a2c10; color:#e8c890; }
+  /* info drawer */
+  details.info { padding:8px 14px; border-bottom:1px solid var(--border); background:#0c0c0e; }
+  details.info summary { cursor:pointer; color:var(--muted); user-select:none; }
+  details.info .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:12px 0 4px; max-width:900px; }
+  details.info .card { background:#0a0a0a; border:1px solid var(--border); border-radius:8px; padding:10px 14px; }
+  details.info .card h4 { margin:0 0 8px; color:#a0b3d0; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; font-weight:600; }
+  details.info .card .row { display:flex; justify-content:space-between; gap:8px; padding:2px 0; font-size:13px; }
+  details.info .card .row .k { color:var(--muted); }
+  details.info .card .row .v { font-weight:500; color:#eee; text-align:right; word-break:break-all; }
+  details.info .card .v.green { color:#7fd0a3; }
+  details.info .card .v.amber { color:#e8c890; }
+  details.info .card .v.red   { color:#e89090; }
+  @media (max-width: 700px) { details.info .info-grid { grid-template-columns:1fr; } }
 </style>
 </head><body>
 <header>
@@ -48,8 +62,48 @@
     <option value="10503">:10503 vision</option>
   </select>
   <span id="status" class="pill">checking…</span>
+  <span id="activity" class="pill" style="display:none">idle</span>
   <button id="clear">clear</button>
 </header>
+
+<details class="info" id="info">
+  <summary>info — server, session, memory, network</summary>
+  <div class="info-grid">
+    <div class="card">
+      <h4>Active server</h4>
+      <div class="row"><span class="k">port</span><span class="v" id="i-port">—</span></div>
+      <div class="row"><span class="k">model</span><span class="v" id="i-model">—</span></div>
+      <div class="row"><span class="k">params</span><span class="v" id="i-params">—</span></div>
+      <div class="row"><span class="k">size on disk</span><span class="v" id="i-size">—</span></div>
+      <div class="row"><span class="k">context loaded</span><span class="v" id="i-nctx">—</span></div>
+      <div class="row"><span class="k">context trained</span><span class="v" id="i-nctxtrain">—</span></div>
+      <div class="row"><span class="k">build</span><span class="v" id="i-build">—</span></div>
+    </div>
+    <div class="card">
+      <h4>This session</h4>
+      <div class="row"><span class="k">messages</span><span class="v" id="i-msgs">0</span></div>
+      <div class="row"><span class="k">user tokens (est)</span><span class="v" id="i-utok">0</span></div>
+      <div class="row"><span class="k">assistant tokens (est)</span><span class="v" id="i-atok">0</span></div>
+      <div class="row"><span class="k">last gen rate</span><span class="v" id="i-tps">—</span></div>
+      <div class="row"><span class="k">session started</span><span class="v" id="i-session">—</span></div>
+    </div>
+    <div class="card">
+      <h4>Server activity</h4>
+      <div class="row"><span class="k">activity</span><span class="v" id="i-activity">—</span></div>
+      <div class="row"><span class="k">slot 0 prompt</span><span class="v" id="i-slot-pn">—</span></div>
+      <div class="row"><span class="k">slot 0 predicted</span><span class="v" id="i-slot-tn">—</span></div>
+      <div class="row"><span class="k">sleeping</span><span class="v" id="i-sleep">—</span></div>
+    </div>
+    <div class="card">
+      <h4>Sampling defaults</h4>
+      <div class="row"><span class="k">temperature</span><span class="v" id="i-temp">—</span></div>
+      <div class="row"><span class="k">top_p</span><span class="v" id="i-topp">—</span></div>
+      <div class="row"><span class="k">top_k</span><span class="v" id="i-topk">—</span></div>
+      <div class="row"><span class="k">chat format</span><span class="v" id="i-fmt">—</span></div>
+    </div>
+  </div>
+</details>
+
 
 <details class="settings">
   <summary>settings</summary>
@@ -76,6 +130,7 @@
 const chat = document.getElementById('chat');
 const portSel = document.getElementById('port');
 const statusEl = document.getElementById('status');
+const activityEl = document.getElementById('activity');
 const form = document.getElementById('f');
 const input = document.getElementById('q');
 const sendBtn = document.getElementById('send');
@@ -86,25 +141,117 @@ const tempEl = document.getElementById('temp');
 const toppEl = document.getElementById('topp');
 const history = [];
 
-async function ping() {
-  const port = portSel.value;
+// ── session counters ──
+const session = {
+  started: new Date(),
+  msgs: 0,
+  userTokens: 0,
+  assistantTokens: 0,
+  lastTps: null,
+};
+const $ = (id) => document.getElementById(id);
+const fmtBytes = (n) => {
+  if (!Number.isFinite(n)) return '—';
+  for (const u of ['B','KiB','MiB','GiB','TiB']) {
+    if (n < 1024) return n.toFixed(1)+' '+u;
+    n /= 1024;
+  }
+  return n.toFixed(1)+' PiB';
+};
+const tokEst = (s) => Math.ceil((s||'').length / 4);  // ~4 chars/token
+function bumpSession() {
+  session.msgs = history.length;
+  session.userTokens = history.filter(m=>m.role==='user').reduce((a,m)=>a+tokEst(m.content),0);
+  session.assistantTokens = history.filter(m=>m.role==='assistant').reduce((a,m)=>a+tokEst(m.content),0);
+  $('i-msgs').textContent = session.msgs;
+  $('i-utok').textContent = session.userTokens.toLocaleString();
+  $('i-atok').textContent = session.assistantTokens.toLocaleString();
+  $('i-session').textContent = session.started.toLocaleTimeString();
+}
+
+async function getJson(port, path) {
   try {
-    const r = await fetch(`http://127.0.0.1:${port}/health`);
-    if (r.ok) {
-      statusEl.textContent = `:${port} up`;
-      statusEl.className = 'pill up';
-    } else {
-      statusEl.textContent = `:${port} ${r.status}`;
-      statusEl.className = 'pill down';
-    }
+    const r = await fetch(`http://127.0.0.1:${port}${path}`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+async function refreshInfo() {
+  const port = portSel.value;
+  $('i-port').textContent = `:${port}`;
+
+  // /health drives the header pill
+  let healthy = false;
+  try {
+    const h = await fetch(`http://127.0.0.1:${port}/health`);
+    healthy = h.ok;
+    statusEl.textContent = healthy ? `:${port} up` : `:${port} ${h.status}`;
+    statusEl.className = 'pill ' + (healthy ? 'up' : 'down');
   } catch {
     statusEl.textContent = `:${port} offline`;
     statusEl.className = 'pill down';
   }
-}
-portSel.onchange = ping; ping(); setInterval(ping, 5000);
+  if (!healthy) {
+    ['i-model','i-params','i-size','i-nctx','i-nctxtrain','i-build',
+     'i-activity','i-slot-pn','i-slot-tn','i-sleep','i-temp','i-topp','i-topk','i-fmt']
+      .forEach(id => $(id).textContent = '—');
+    activityEl.style.display = 'none';
+    return;
+  }
 
-clearBtn.onclick = () => { chat.innerHTML = ''; history.length = 0; };
+  // Pull all three in parallel
+  const [models, props, slots] = await Promise.all([
+    getJson(port, '/v1/models'),
+    getJson(port, '/props'),
+    getJson(port, '/slots'),
+  ]);
+
+  if (models?.data?.[0]) {
+    const m = models.data[0];
+    $('i-model').textContent = m.id;
+    $('i-params').textContent = m.meta?.n_params ? (m.meta.n_params/1e9).toFixed(2)+' B' : '—';
+    $('i-size').textContent = m.meta?.size ? fmtBytes(m.meta.size) : '—';
+    $('i-nctxtrain').textContent = m.meta?.n_ctx_train?.toLocaleString() ?? '—';
+  }
+
+  if (props) {
+    $('i-build').textContent = props.build_info ?? '—';
+    $('i-sleep').textContent = String(props.is_sleeping ?? '—');
+    const ds = props.default_generation_settings ?? {};
+    $('i-nctx').textContent = ds.n_ctx?.toLocaleString() ?? '—';
+    const p = ds.params ?? {};
+    $('i-temp').textContent = p.temperature?.toFixed(3) ?? '—';
+    $('i-topp').textContent = p.top_p?.toFixed(3) ?? '—';
+    $('i-topk').textContent = p.top_k ?? '—';
+    $('i-fmt').textContent = p.chat_format ?? '—';
+  }
+
+  // /slots — live activity
+  if (Array.isArray(slots) && slots[0]) {
+    const s = slots[0];
+    const busy = !!s.is_processing;
+    $('i-activity').textContent = busy ? 'generating' : 'idle';
+    $('i-activity').className = 'v ' + (busy ? 'amber' : 'green');
+    $('i-slot-pn').textContent = s.prompt?.length ?? s.n_prompt_tokens_processed ?? '—';
+    $('i-slot-tn').textContent = s.n_decoded ?? s.n_predicted ?? '—';
+    activityEl.style.display = busy ? 'inline-block' : 'none';
+    activityEl.textContent = busy ? 'generating…' : 'idle';
+    activityEl.className = 'pill ' + (busy ? 'busy' : 'up');
+  }
+}
+portSel.onchange = refreshInfo;
+refreshInfo();
+setInterval(refreshInfo, 3000);
+bumpSession();
+
+clearBtn.onclick = () => {
+  chat.innerHTML = '';
+  history.length = 0;
+  session.started = new Date();
+  bumpSession();
+  $('i-tps').textContent = '—';
+};
 
 // Tiny markdown renderer (no deps; covers what Qwen tends to emit)
 function md(text) {
@@ -157,6 +304,7 @@ form.onsubmit = async (e) => {
   if (!q) return;
   input.value = ''; sendBtn.disabled = true;
   history.push({ role: 'user', content: q });
+  bumpSession();
   const u = append('user'); u.body.textContent = q;
   const a = append('assistant');
   const t0 = performance.now();
@@ -204,6 +352,13 @@ form.onsubmit = async (e) => {
       }
     }
     history.push({ role: 'assistant', content: acc });
+    const dt = (performance.now() - t0) / 1000;
+    if (nWords && dt > 0) {
+      const wps = nWords / dt;
+      session.lastTps = wps;
+      $('i-tps').textContent = `~${wps.toFixed(1)} word/s (${dt.toFixed(1)}s)`;
+    }
+    bumpSession();
   } catch (e) {
     a.body.textContent = `error: ${e}`;
     a.meta.textContent = '(server may be down)';

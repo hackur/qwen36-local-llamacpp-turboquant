@@ -168,6 +168,28 @@ draw() {
     kvm "" "(no server)"
   fi
 
+  # ── AVAILABLE MODELS ────────────────────────────────────────────────────
+  hdr "AVAILABLE MODELS"
+  local active_path=""
+  if curl -sf --max-time 1 "http://127.0.0.1:$active_port/health" >/dev/null 2>&1; then
+    active_path=$(py_get "http://127.0.0.1:$active_port/props" "r['model_path']")
+    # Server reports either the symlink path or the underlying file; canonicalize for comparison.
+    [[ -e "$active_path" ]] && active_path=$(/usr/bin/python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$active_path" 2>/dev/null)
+  fi
+  for link in "$REPO/models"/*.gguf; do
+    [[ -e "$link" ]] || continue
+    local n; n=$(basename "$link" .gguf)
+    [[ "$n" == *.mmproj ]] && continue
+    local real; real=$(/usr/bin/python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$link" 2>/dev/null)
+    local size_h="?"
+    [[ -f "$real" ]] && size_h=$(bytes_pretty "$(wc -c < "$real" | tr -d ' ')")
+    local marker=" "
+    [[ "$active_path" == "$real" ]] && marker="${C_CYA}*${C_R}"
+    local vision="—"
+    [[ -f "$REPO/models/$n.mmproj.gguf" ]] && vision="🖼"
+    printf " %s ${C_BOLD}%-13s${C_R} %8s %s\n" "$marker" "$n" "$size_h" "$vision"
+  done
+
   # ── DISK ───────────────────────────────────────────────────────────────
   hdr "DISK"
   local model_disk vendor_disk logs_disk bench_disk

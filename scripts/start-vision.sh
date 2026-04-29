@@ -6,14 +6,21 @@ source "$SCRIPT_DIR/_common.sh"
 
 PORT="${PORT:-10503}"
 CTX="${CTX:-32768}"
-MODEL="${MODEL:-$MODEL_PRIMARY}"
-MMPROJ="${MMPROJ:-$MMPROJ_PRIMARY}"
+MODEL_INPUT="${MODEL:-qwen36-35b}"
 KV="${KV:-turbo3}"
 BIN="$REPO/vendor/llama-cpp-turboquant/build/bin/llama-server"
 LOG="$REPO/logs/vision.log"
 
 [[ -x "$BIN" ]] || { echo "❌ TurboQuant fork not built"; exit 1; }
+resolve_model "$MODEL_INPUT"
+MODEL="$RESOLVED_MODEL"
 ensure_model "$MODEL"
+MMPROJ="${MMPROJ:-${RESOLVED_MMPROJ:-}}"
+if [[ -z "$MMPROJ" || ! -f "$MMPROJ" ]]; then
+  echo "❌ No mmproj for '$MODEL_INPUT'. Pick a multimodal model:"
+  ls "$REPO/models/"*.mmproj.gguf 2>/dev/null | sed 's/.mmproj.gguf$//; s|.*/||; s/^/  /'
+  exit 1
+fi
 ensure_model "$MMPROJ"
 ensure_port_free "$PORT"
 mkdir -p "$REPO/logs"

@@ -7,21 +7,27 @@ source "$SCRIPT_DIR/_common.sh"
 
 PORT="${PORT:-10501}"
 CTX="${CTX:-131072}"
-MODEL="${MODEL:-$MODEL_PRIMARY}"
+MODEL_INPUT="${MODEL:-$MODEL_PRIMARY}"
 KV="${KV:-turbo3}"   # turbo2 / turbo3 / turbo4 / q8_0 / q4_0 / f16
 BIN="$REPO/vendor/llama-cpp-turboquant/build/bin/llama-server"
 LOG="$REPO/logs/turboquant.log"
 
 [[ -x "$BIN" ]] || { echo "❌ TurboQuant fork not built. Run scripts/build-llama.sh"; exit 1; }
+resolve_model "$MODEL_INPUT"
+MODEL="$RESOLVED_MODEL"
 ensure_model "$MODEL"
 ensure_port_free "$PORT"
 mkdir -p "$REPO/logs"
 
 # Probe the binary for the requested cache type.
-if ! "$BIN" -h 2>&1 | grep -q -- "$KV"; then
+# Note: we capture help into a variable first — `cmd | grep -q` closes stdin
+# after the first match, the binary gets SIGPIPE on its next write, and with
+# `set -o pipefail` that turns into a false "not found" verdict.
+HELP_OUT=$("$BIN" -h 2>&1 || true)
+if ! grep -q -- "$KV" <<< "$HELP_OUT"; then
   echo "⚠  '$KV' not in this build's --cache-type help."
   echo "   Available cache types in this build:"
-  "$BIN" -h 2>&1 | grep -A2 -i "cache.type" | head -10
+  grep -A2 -i "cache.type" <<< "$HELP_OUT" | head -10
   echo "   Falling back to KV=q8_0"
   KV=q8_0
 fi

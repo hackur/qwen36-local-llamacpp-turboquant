@@ -21,6 +21,33 @@ start: ## Start TurboQuant server in background (port 10501)
 start-baseline: ## Start mainline f16 baseline (port 10500)
 	./scripts/start-baseline.sh > logs/baseline.log 2>&1 &
 
+models: ## List all available model aliases
+	./scripts/list-models.sh
+
+start-tiny: ## Start TinyLlama 1.1B (smoke test, ~700 MB) — turbo3 unsupported, uses q8_0
+	MODEL=tiny CTX=2048 KV=q8_0 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
+
+start-nemotron: ## Start Nemotron-3 Nano 4B (~2.8 GB)
+	MODEL=nemotron-4b CTX=8192 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
+
+start-crow: ## Start Crow-9B (Qwen3.5 distill, ~5 GB)
+	MODEL=crow-9b CTX=16384 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
+
+start-gemma4-e4b: ## Start Gemma 4 E4B (small, ~8 GB)
+	MODEL=gemma4-e4b CTX=16384 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
+
+start-qwen35-9b: ## Start Qwen 3.5 9B Q8_0 (~9.5 GB)
+	MODEL=qwen35-9b CTX=32768 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
+
+start-gpt-oss: ## Start GPT-OSS 20B MXFP4 — turbo3 unsupported on MXFP4 weights, uses q8_0
+	MODEL=gpt-oss-20b CTX=32768 KV=q8_0 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
+
+start-gemma4-26b: ## Start Gemma 4 26B-A4B (~17 GB MoE)
+	MODEL=gemma4-26b CTX=32768 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
+
+start-qwen36-27b: ## Start Qwen 3.6 27B IQ2_XXS (~9 GB dense)
+	MODEL=qwen36-27b CTX=32768 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
+
 stop: ## Stop all llama-server processes from this repo
 	./scripts/stop-all.sh
 

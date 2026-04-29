@@ -6,11 +6,13 @@ source "$SCRIPT_DIR/_common.sh"
 
 PORT="${PORT:-10500}"
 CTX="${CTX:-32768}"
-MODEL="${MODEL:-$MODEL_PRIMARY}"
+MODEL_INPUT="${MODEL:-$MODEL_PRIMARY}"
 BIN="$REPO/vendor/llama.cpp-mainline/build/bin/llama-server"
 LOG="$REPO/logs/baseline.log"
 
 [[ -x "$BIN" ]] || { echo "❌ Mainline not built. Run scripts/build-llama.sh"; exit 1; }
+resolve_model "$MODEL_INPUT"
+MODEL="$RESOLVED_MODEL"
 ensure_model "$MODEL"
 ensure_port_free "$PORT"
 mkdir -p "$REPO/logs"

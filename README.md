@@ -65,8 +65,17 @@ The web demo also has an **info drawer** in the header (collapsed by default) wi
 $ make
 Targets:
   build               Build mainline + TurboQuant llama.cpp (Metal). Idempotent.
-  start               Start TurboQuant server in background (port 10501)
+  start               Start default model (qwen36-35b) on :10501
   start-baseline      Start mainline f16 baseline (port 10500)
+  start-tiny          TinyLlama 1.1B (smoke test) — uses q8_0
+  start-nemotron      Nemotron-3 4B
+  start-crow          Crow 9B (Qwen3.5 distill)
+  start-gemma4-e4b    Gemma 4 E4B
+  start-qwen35-9b     Qwen 3.5 9B
+  start-gpt-oss       GPT-OSS 20B — uses q8_0
+  start-gemma4-26b    Gemma 4 26B-A4B (MoE)
+  start-qwen36-27b    Qwen 3.6 27B
+  models              List every available model alias
   stop                Stop all llama-server processes from this repo
   status              What's running and where (terse)
   info                Full one-shot dashboard (env, server, memory, network, disk, launchd, last bench)

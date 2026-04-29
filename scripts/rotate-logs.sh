@@ -16,7 +16,8 @@ find "$LOGDIR" -type f -name "*.log.gz" -mtime "+$KEEP_DAYS" -print -delete
 # 3. Truncate the active turboquant.log if larger than 100 MB (server keeps appending while running).
 for f in "$LOGDIR/turboquant.log" "$LOGDIR/baseline.log"; do
   [[ -f "$f" ]] || continue
-  size=$(stat -f %z "$f" 2>/dev/null || echo 0)
+  # `stat` flags differ between macOS BSD and GNU coreutils — `wc -c` is POSIX everywhere.
+  size=$(wc -c < "$f" | tr -d ' ')
   if (( size > 100*1024*1024 )); then
     cp "$f" "$f.$(date +%Y%m%d-%H%M%S).log"
     : > "$f"

@@ -81,8 +81,9 @@ networksetup -setairportpower en0 on
 
 - **First build** — clones llama.cpp from GitHub. Done once.
 - **Model download** — done in LM Studio, or via `huggingface-cli`. Done once per model.
-- **Python deps** — `pip install openai` once. After that the SDK works offline against localhost.
 - **Editor extensions** — Continue / OpenCode / Zed installation pulls from npm/pypi. Once installed, they work offline against localhost.
+
+> **Note:** `clients/python-demo.py` uses **only stdlib** (`urllib.request`) — no `pip install openai` needed. Same for `scripts/bench.py`, `scripts/needle.py`, `scripts/mini-eval.py`.
 
 After that initial setup, you can stay offline indefinitely. The model file, the binaries, and the demos are all on disk.
 

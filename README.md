@@ -44,6 +44,21 @@ To make it auto-start at login (truly always-on offline):
 make install-launchd
 ```
 
+## What's running right now
+
+```bash
+make info        # one screen: env, server config, params, KV type, RSS,
+                 # system memory, inbound/outbound sockets, disk usage,
+                 # launchd state, last bench numbers
+make info-watch  # same, refreshing every 2 s
+```
+
+The web demo also has an **info drawer** in the header (collapsed by default) with:
+- active server (model, params, context loaded/trained, build SHA)
+- this session (messages, user/assistant token estimates, last gen rate)
+- live activity from `/slots` (idle / generating)
+- sampling defaults from `/props`
+
 ## All targets
 
 ```
@@ -53,7 +68,9 @@ Targets:
   start               Start TurboQuant server in background (port 10501)
   start-baseline      Start mainline f16 baseline (port 10500)
   stop                Stop all llama-server processes from this repo
-  status              What's running and where
+  status              What's running and where (terse)
+  info                Full one-shot dashboard (env, server, memory, network, disk, launchd, last bench)
+  info-watch          Same as `info`, refreshing every 2 s
   bench               Run A/B benchmark (assumes both servers up)
   needle              Long-context recall test on TurboQuant
   demo                Terminal chat REPL

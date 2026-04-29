@@ -32,11 +32,28 @@ Full results: [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
 
 ```bash
 make build                    # one-time, ~5 min, Metal builds of both forks
-make start                    # turboquant server on :10501
+make start                    # turboquant server on :10501 (default model: qwen36-35b)
 make open                     # opens clients/web-demo.html in your browser
 ```
 
 Or double-click **`Qwen-Offline.command`** in Finder — starts the server and pops the web UI.
+
+## What can you do with this?
+
+| Goal | Recipe | Pointer |
+|---|---|---|
+| Chat in a browser | `make start && make open` | `clients/web-demo.html` |
+| Chat in terminal | `make start && make demo` | `scripts/demo-chat.sh` |
+| Use it with VS Code Continue | drop `configs/continue.json` | [`docs/usage.md`](docs/usage.md#editor-integration) |
+| Long-context document QA | up to 128K tokens of context with `qwen36-35b` | [`docs/usage.md`](docs/usage.md#long-context-document-qa--rag) |
+| Ask about an image | `make stop && MODEL=qwen36-35b PORT=10503 ./scripts/start-vision.sh &` | [`docs/multimodal.md`](docs/multimodal.md) |
+| Strict JSON output | `response_format: {"type":"json_schema", ...}` | [`docs/usage.md`](docs/usage.md#json--structured-output) |
+| Switch model on the fly | `make stop && make start-gemma4-26b` | [`docs/usage.md`](docs/usage.md#switching-models-live-stop-and-swap) |
+| Streaming tokens (curl/python/JS) | three working examples | [`docs/usage.md`](docs/usage.md#streaming-chat--three-languages) |
+| See live status / memory / network | `make info` or `make info-watch` | scripts/info.sh |
+| Confirm offline-clean | `make audit-offline` | scripts/info.sh |
+
+**The full cookbook with examples for every model is [`docs/usage.md`](docs/usage.md).**
 
 To make it auto-start at login (truly always-on offline):
 

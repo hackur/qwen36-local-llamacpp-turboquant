@@ -24,7 +24,7 @@ That's it. **Empirically verified** — `lsof` on the running process before and
 
 ```
 $ lsof -nP -p $(pgrep -f vendor/llama-cpp-turboquant.*llama-server) | grep -E "TCP|UDP"
-llama-ser 51886 user  3u  IPv4 ...  TCP 127.0.0.1:10501 (LISTEN)
+llama-ser 51886 user   3u  IPv4 ...  TCP 127.0.0.1:10501 (LISTEN)
 ```
 
 One socket. localhost. Read-only model file. **No outbound. No DNS. No telemetry. No license check.**

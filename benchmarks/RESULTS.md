@@ -43,7 +43,7 @@ Prompt processing actually *speeds up* at long context because batched prefill f
 
 ```
 $ lsof -nP -p $(pgrep -f vendor/llama-cpp-turboquant.*llama-server) | grep TCP
-llama-ser 51886 user  3u  IPv4 ...  TCP 127.0.0.1:10501 (LISTEN)
+llama-ser 51886 user   3u  IPv4 ...  TCP 127.0.0.1:10501 (LISTEN)
 ```
 
 Single localhost listener. No outbound connections from the llama-server PID. Wi-Fi can be disabled with no impact on inference.

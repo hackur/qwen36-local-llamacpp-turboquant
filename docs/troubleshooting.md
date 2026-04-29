@@ -51,6 +51,37 @@ MODEL=/some/other/path.gguf ./scripts/start-baseline.sh
 ### Quality regression on TurboQuant vs baseline
 Run `scripts/quality-check.sh` and diff outputs. turbo3 trades some bits for context — if a prompt is sensitive to recall fidelity, route it to baseline (port 10500).
 
+## Model-specific gotchas
+
+### `Abort trap: 6` during model load
+The `KV=turbo3` kernel doesn't support every architecture / quantization. Confirmed crashes on M3 Max:
+
+| Model | Crashes? | Recommended KV |
+|---|---|---|
+| `tiny` (TinyLlama 1.1B) | yes — head dim too small | `q8_0` |
+| `gpt-oss-20b` (MXFP4) | yes — kernel doesn't handle MXFP4 weights with turbo3 | `q8_0` |
+| everything else we tested | no | `turbo3` |
+
+Their per-model Make targets pin `KV=q8_0` automatically. Manually:
+```bash
+MODEL=tiny KV=q8_0 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
+```
+
+### Empty replies from Qwen models
+Qwen 3.5 / 3.6 default to `enable_thinking:true` with `--jinja`. Short `max_tokens` budgets get fully consumed by the `<think>...</think>` block. Either:
+- bump `max_tokens` to 1500+ for chain-of-thought, or
+- pass `chat_template_kwargs: {"enable_thinking": false}` for direct replies.
+
+Gemma 4, GPT-OSS, and other non-Qwen models ignore the flag — they don't have a thinking mode in their chat template.
+
+### Markdown fences around JSON
+Even when told "JSON only", Qwen and Gemma wrap output in ```` ```json ```` fences for chat formatting. Solutions, in increasing strictness:
+1. Strip with sed: `sed -E 's/^```(json)?//; s/```$//'`
+2. Use `response_format: {"type":"json_object"}` + a system prompt
+3. Use `response_format: {"type":"json_schema", ...}` — strictest, works without a system prompt
+
+See [`docs/usage.md`](usage.md#json--structured-output).
+
 ## macOS gotchas
 
 ### `rotate-logs.sh` errors with `File: unbound variable`

@@ -17,6 +17,21 @@ Tested against `vendor/llama-cpp-turboquant/build/bin/llama-server` on `127.0.0.
 | `/v1/embeddings` | POST | 501 | Model isn't an embedding model. Load a separate embedder if you need this. |
 | `/infill` | POST | 500 | Model isn't a fill-in-the-middle model |
 
+## Per-model API quirks
+
+Chat templates differ between families. The same JSON payload behaves differently depending on which model is loaded:
+
+| Field | Qwen 3.5 / 3.6 | Gemma 4 | GPT-OSS 20B | TinyLlama / Nemotron |
+|---|---|---|---|---|
+| `chat_template_kwargs.enable_thinking` | ✅ — toggles `<think>` blocks | ignored | ignored | ignored |
+| System role | supported | supported | supported | supported (limited) |
+| Tool calling | ✅ via Qwen function-calling format | partial | ✅ OpenAI format | not really |
+| Vision (image_url content) | ✅ with mmproj | ✅ with mmproj | ✗ | ✗ |
+| `response_format: json_object` | ✅ | ✅ | ✅ | ✅ |
+| `response_format: json_schema` | ✅ | ✅ | ✅ | ✅ |
+
+`response_format` is enforced server-side via grammar-constrained sampling, not by the model. It works for any loaded model. See [`docs/usage.md`](usage.md#json--structured-output) for examples.
+
 ## Useful payloads
 
 ### Standard chat with thinking off (the way we benchmarked)

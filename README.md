@@ -89,6 +89,16 @@ models/               symlinks to LM Studio GGUFs
 logs/                 runtime logs (gitignored)
 ```
 
+## Optional: weekly health check
+
+If you want a recurring background agent to confirm nothing has regressed, you can use Claude Code's `/schedule` to run something like:
+
+```
+make audit-offline && make bench && make needle
+```
+
+…on a weekly cadence. Skip it unless you actually want the routine — the stack works without it.
+
 ## What this isn't
 
 A model trainer, a fine-tuning toolkit, a MCP server, or a Cursor replacement. It's a **local inference server** with one job: serve Qwen 3.6 reliably with the network off, fast, on Apple Silicon.

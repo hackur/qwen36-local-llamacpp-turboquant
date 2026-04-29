@@ -77,3 +77,40 @@ If LM Studio updates and moves files: `./scripts/symlink-models.sh` re-creates t
 - 35-B-A3B Q6_K runs at **63 tok/s gen / 322 tok/s prompt** with **64K context** on M3 Max 64 GB.
 - Always-on via launchd. Wi-Fi off → no impact.
 - 41 + 42 = 83 total tasks, 81 completed, 2 deferred (vision e2e, integration verify).
+
+---
+
+## Round 3 — dogfood pass
+
+Walked through every documented `make` target / script / API example and fixed what didn't work. **5 real bugs found and fixed**:
+
+| # | Where | Bug | Fix |
+|---|---|---|---|
+| 1 | `scripts/healthcheck.sh` | Reply was empty — Qwen's thinking-mode ate the 20-token budget | Pass `enable_thinking:false` and bump max_tokens to 40; use `json.loads(strict=False)` |
+| 2 | `clients/python-demo.py` | Required `pip install openai` (offline-unfriendly) | Rewrote with stdlib `urllib.request` — zero deps |
+| 3 | `scripts/needle.py` | `make needle` returned HTTP 400 when target > server's loaded n_ctx | Auto-detect via `/props` and clamp to 80% of n_ctx |
+| 4 | `scripts/long-context-test.sh` | Bash-with-`yes`+jq pipe hung on big prompts | Replaced with thin wrapper that delegates to `needle.py` |
+| 5 | `scripts/rotate-logs.sh` | `stat -f %z` failed because user has GNU coreutils' `stat` in PATH (BSD `-f` ≠ GNU `-f`) | Use POSIX `wc -c` instead |
+
+### What we verified end-to-end
+
+| Path | Result |
+|---|---|
+| `make` (no args) | help table prints |
+| `make status` | shows server up at pid + n_ctx + model |
+| `make audit-offline` | ✓ zero non-localhost sockets |
+| `make demo` (piped two turns + /reset) | ALPHA → reset → BETA, history works |
+| `make bench` (only one server up) | gracefully skips :10500, runs :10501 |
+| `make needle` | recovered the password at 50K tokens |
+| `make uninstall-launchd` then `make install-launchd` | server stops, then auto-restarts in 5s |
+| `Qwen-Offline.command` (server up) | detects, opens browser, exits 0 |
+| `scripts/healthcheck.sh` | `reply: 'Hi there, how are you today?'` 63 tok/s |
+| `scripts/quality-check.sh` | all 5 prompts produced correct answers |
+| `scripts/upgrade.sh` (n/n) | shows incoming commits, declines cleanly |
+| `scripts/rotate-logs.sh` | gzipped old logs, server stayed up |
+| `scripts/symlink-models.sh` (re-run) | idempotent |
+| API endpoints from `docs/api.md` | `/health 200`, `/v1/models 200`, `/props 200`, `/slots 200`, tokenize works, chat works |
+| `clients/python-demo.py` | `PASS` reply via stdlib only |
+| `clients/web-demo.html` static audit | zero external resources, only `127.0.0.1` fetches |
+
+Updated `docs/offline-mode.md` (removed stale `pip install openai` step) and `docs/troubleshooting.md` (added the 3 gotchas above).

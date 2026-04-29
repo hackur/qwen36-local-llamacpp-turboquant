@@ -51,6 +51,20 @@ MODEL=/some/other/path.gguf ./scripts/start-baseline.sh
 ### Quality regression on TurboQuant vs baseline
 Run `scripts/quality-check.sh` and diff outputs. turbo3 trades some bits for context — if a prompt is sensitive to recall fidelity, route it to baseline (port 10500).
 
+## macOS gotchas
+
+### `rotate-logs.sh` errors with `File: unbound variable`
+You have GNU coreutils' `stat` in PATH (e.g. via `brew install coreutils` aliasing `stat` → `gstat`). GNU `stat -f` means "filesystem info"; BSD `stat -f` means "format". Already fixed in `rotate-logs.sh` (uses `wc -c`), but if you've forked and re-introduced `stat`, switch to `wc -c < file` for portability.
+
+### `make needle` returns HTTP 400
+The needle test asks for ~50K tokens. If the running server's `n_ctx` is smaller (default for `start-turboquant.sh` is 128K, but anything you've launched with `CTX=32768` etc. won't accept 50K). Either:
+- restart the server: `make stop && make start`
+- or lower the target: `python3 scripts/needle.py 20000`
+- the test now auto-clamps to 80% of the server's loaded `n_ctx`.
+
+### Empty replies from `healthcheck.sh` or any test prompt
+Qwen 3.6 has thinking mode on by default. If `max_tokens` is small (e.g. 20), the entire budget goes to `<think>...</think>` and the visible content is empty. Already handled in our test scripts via `chat_template_kwargs:{"enable_thinking":false}`. For your own clients, either set thinking off or give the model 500+ max_tokens.
+
 ## Five known errors from the upstream guide
 
 These come from the iflow-mcp + Hugging Face TurboQuant guide. Most are CUDA-specific; we still get bitten by the first two in spirit:

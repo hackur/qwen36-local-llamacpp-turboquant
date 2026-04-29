@@ -2,10 +2,13 @@
 SHELL := bash
 .DEFAULT_GOAL := help
 
-.PHONY: help build start stop status bench demo open install-launchd uninstall-launchd clean
+.PHONY: help build start start-baseline start-tiny start-nemotron start-crow \
+        start-gemma4-e4b start-qwen35-9b start-gpt-oss start-gemma4-26b start-qwen36-27b \
+        stop status info info-watch bench needle demo open \
+        install-launchd uninstall-launchd clean audit-offline models
 
 help:
-	@awk 'BEGIN{FS=":.*##"; printf "Targets:\n"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN{FS=":.*##"; printf "Targets:\n"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 build: ## Build mainline + TurboQuant llama.cpp (Metal). Idempotent.
 	./scripts/build-llama.sh

@@ -94,9 +94,9 @@ Targets:
 
 Apple M3 Max · 64 GB unified memory · macOS 26.4.1.
 
-## Models
+## Hardware tested again
 
-Re-uses LM Studio's GGUFs without copying — see [`scripts/symlink-models.sh`](scripts/symlink-models.sh). Primary: `Qwen3.6-35B-A3B-Q6_K.gguf` (28.5 GB). Fallback: `Qwen3.6-27B-IQ2_XXS.gguf` (9.4 GB).
+The 9-model picker above is the canonical "Models" section.
 
 ## Layout
 

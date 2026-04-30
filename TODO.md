@@ -23,6 +23,6 @@
 ## P3 - release hygiene
 
 - [ ] Add a license after choosing the intended license.
-- [ ] Add a changelog or release notes for `v0.0.1`.
+- [x] Add a changelog or release notes for `v0.0.1`.
 - [ ] Decide whether raw benchmark text outputs should stay tracked or move to generated artifacts.
-- [ ] Add contribution notes for model path changes and benchmark submissions.
+- [x] Add contribution notes for model path changes and benchmark submissions.

@@ -4,7 +4,27 @@
 # Adding a new model? Add an entry to MODELS below.
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-mkdir -p "$REPO/models"
+DRY_RUN=0
+if [[ "${1:-}" == "--dry-run" ]]; then
+  DRY_RUN=1
+fi
+
+run() {
+  if (( DRY_RUN )); then
+    printf "  dry-run: %q" "$1"
+    shift
+    printf " %q" "$@"
+    printf "\n"
+  else
+    "$@"
+  fi
+}
+
+if (( DRY_RUN )); then
+  echo "dry-run: no files will be changed"
+else
+  mkdir -p "$REPO/models"
+fi
 
 # Wipe pre-alias-scheme symlinks (older runs created descriptive names like
 # `Qwen3.6-35B-A3B-Q6_K.gguf` and `mmproj-Qwen3.6-27B.gguf`). Keep only
@@ -13,7 +33,7 @@ for old in "$REPO/models/Qwen3.6-27B-IQ2_XXS.gguf" \
            "$REPO/models/Qwen3.6-35B-A3B-Q6_K.gguf" \
            "$REPO/models/mmproj-Qwen3.6-27B.gguf" \
            "$REPO/models/mmproj-Qwen3.6-35B-A3B.gguf"; do
-  [[ -L "$old" ]] && { rm -f "$old"; echo "  rm (pre-alias) $(basename "$old")"; }
+  [[ -L "$old" ]] && { run rm -f "$old"; echo "  rm (pre-alias) $(basename "$old")"; }
 done
 
 # alias  weight-source-relpath                                                                              mmproj-source-relpath (or "" if none)
@@ -35,7 +55,7 @@ for entry in "${MODELS[@]}"; do
   read -r alias weight mmproj <<< "$entry"
   src="$LMSTUDIO_ROOT/$weight"
   if [[ -f "$src" ]]; then
-    ln -sf "$src" "$REPO/models/$alias.gguf"
+    run ln -sf "$src" "$REPO/models/$alias.gguf"
     printf "  %-13s ./models/%s.gguf\n" "$alias" "$alias"
     ok=$((ok+1))
   else
@@ -46,11 +66,15 @@ for entry in "${MODELS[@]}"; do
   if [[ -n "${mmproj:-}" ]]; then
     msrc="$LMSTUDIO_ROOT/$mmproj"
     if [[ -f "$msrc" ]]; then
-      ln -sf "$msrc" "$REPO/models/$alias.mmproj.gguf"
+      run ln -sf "$msrc" "$REPO/models/$alias.mmproj.gguf"
       printf "                ./models/%s.mmproj.gguf\n" "$alias"
     fi
   fi
 done
 
 echo
-echo "✓ linked $ok models ($missing missing). Use them via: MODEL=<alias> ./scripts/start-turboquant.sh"
+if (( DRY_RUN )); then
+  echo "✓ would link $ok models ($missing missing). Use them via: MODEL=<alias> ./scripts/start-turboquant.sh"
+else
+  echo "✓ linked $ok models ($missing missing). Use them via: MODEL=<alias> ./scripts/start-turboquant.sh"
+fi

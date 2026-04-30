@@ -17,7 +17,7 @@
 ## P2 - validation
 
 - [x] Add a non-model shell test that runs `bash -n` over scripts and checks Makefile help.
-- [ ] Add a dry-run mode for model symlinking and startup preflight.
+- [x] Add a dry-run mode for model symlinking and startup preflight.
 - [ ] Add a CI workflow for static checks that does not download models or build large dependencies.
 
 ## P3 - release hygiene

@@ -5,6 +5,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_common.sh"
 
+DRY_RUN=0
+if [[ "${1:-}" == "--dry-run" ]]; then
+  DRY_RUN=1
+fi
+
 PORT="${PORT:-10501}"
 CTX="${CTX:-131072}"
 MODEL_INPUT="${MODEL:-$MODEL_PRIMARY}"
@@ -34,6 +39,20 @@ fi
 
 echo "▶ turboquant @ http://127.0.0.1:$PORT  (KV=$KV, ${CTX} ctx)"
 echo "  TURBO_LAYER_ADAPTIVE=1   log → $LOG"
+if (( DRY_RUN )); then
+  printf "dry-run:"
+  printf " %q" TURBO_LAYER_ADAPTIVE=1 exec "$BIN" \
+    -m "$MODEL" \
+    --port "$PORT" \
+    -c "$CTX" \
+    -ctk "$KV" -ctv "$KV" \
+    "${COMMON[@]}" \
+    "${SAMPLING[@]}" \
+    --alias qwen3.6-turboquant
+  printf " 2>&1 | tee %q\n" "$LOG"
+  exit 0
+fi
+
 TURBO_LAYER_ADAPTIVE=1 exec "$BIN" \
   -m "$MODEL" \
   --port "$PORT" \

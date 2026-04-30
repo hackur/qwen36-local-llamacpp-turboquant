@@ -4,7 +4,7 @@ SHELL := bash
 
 .PHONY: help build start start-baseline start-tiny start-nemotron start-crow \
         start-gemma4-e4b start-qwen35-9b start-gpt-oss start-gemma4-26b start-qwen36-27b \
-        stop status info info-watch bench needle demo open \
+        stop status info info-watch bench needle demo open preflight check \
         install-launchd uninstall-launchd clean audit-offline models
 
 help:
@@ -13,42 +13,58 @@ help:
 build: ## Build mainline + TurboQuant llama.cpp (Metal). Idempotent.
 	./scripts/build-llama.sh
 
+preflight: ## Check tools, builds, and model symlinks without starting a server
+	./scripts/preflight.sh
+
+check: ## Run static checks that do not need models or network
+	./scripts/static-check.sh
+
 start: ## Start TurboQuant server in background (port 10501)
 	@if curl -sf --max-time 1 http://127.0.0.1:10501/health >/dev/null 2>&1; then \
 		echo "already up on :10501"; \
 	else \
+		mkdir -p logs; \
 		./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 & \
 		echo "starting; log → logs/turboquant.log"; \
 	fi
 
 start-baseline: ## Start mainline f16 baseline (port 10500)
+	@mkdir -p logs
 	./scripts/start-baseline.sh > logs/baseline.log 2>&1 &
 
 models: ## List all available model aliases
 	./scripts/list-models.sh
 
 start-tiny: ## Start TinyLlama 1.1B (smoke test, ~700 MB) — turbo3 unsupported, uses q8_0
+	@mkdir -p logs
 	MODEL=tiny CTX=2048 KV=q8_0 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
 
 start-nemotron: ## Start Nemotron-3 Nano 4B (~2.8 GB)
+	@mkdir -p logs
 	MODEL=nemotron-4b CTX=8192 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
 
 start-crow: ## Start Crow-9B (Qwen3.5 distill, ~5 GB)
+	@mkdir -p logs
 	MODEL=crow-9b CTX=16384 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
 
 start-gemma4-e4b: ## Start Gemma 4 E4B (small, ~8 GB)
+	@mkdir -p logs
 	MODEL=gemma4-e4b CTX=16384 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
 
 start-qwen35-9b: ## Start Qwen 3.5 9B Q8_0 (~9.5 GB)
+	@mkdir -p logs
 	MODEL=qwen35-9b CTX=32768 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
 
 start-gpt-oss: ## Start GPT-OSS 20B MXFP4 — turbo3 unsupported on MXFP4 weights, uses q8_0
+	@mkdir -p logs
 	MODEL=gpt-oss-20b CTX=32768 KV=q8_0 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
 
 start-gemma4-26b: ## Start Gemma 4 26B-A4B (~17 GB MoE)
+	@mkdir -p logs
 	MODEL=gemma4-26b CTX=32768 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
 
 start-qwen36-27b: ## Start Qwen 3.6 27B IQ2_XXS (~9 GB dense)
+	@mkdir -p logs
 	MODEL=qwen36-27b CTX=32768 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
 
 stop: ## Stop all llama-server processes from this repo

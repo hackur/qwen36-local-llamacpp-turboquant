@@ -30,7 +30,10 @@ Full results: [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
 
 ## Quickstart
 
+Requirements: macOS on Apple Silicon, Xcode command line tools, Git, CMake, curl, jq, Python 3, and enough disk for the selected GGUF model plus two `llama.cpp` checkouts.
+
 ```bash
+make preflight                # checks tools, builds, and model symlinks
 make build                    # one-time, ~5 min, Metal builds of both forks
 make start                    # turboquant server on :10501 (default model: qwen36-35b)
 make open                     # opens clients/web-demo.html in your browser
@@ -92,6 +95,8 @@ Targets:
   start-gpt-oss       GPT-OSS 20B — uses q8_0
   start-gemma4-26b    Gemma 4 26B-A4B (MoE)
   start-qwen36-27b    Qwen 3.6 27B
+  preflight           Check tools, builds, and model symlinks without starting a server
+  check               Run static checks that do not need models or network
   models              List every available model alias
   stop                Stop all llama-server processes from this repo
   status              What's running and where (terse)
@@ -111,10 +116,6 @@ Targets:
 
 Apple M3 Max · 64 GB unified memory · macOS 26.4.1.
 
-## Hardware tested again
-
-The 9-model picker above is the canonical "Models" section.
-
 ## Layout
 
 ```
@@ -130,6 +131,13 @@ benchmarks/           RESULTS.md + raw run logs
 vendor/               llama.cpp-mainline + llama-cpp-turboquant (gitignored)
 models/               symlinks to LM Studio GGUFs
 logs/                 runtime logs (gitignored)
+```
+
+You can skip LM Studio if you already have GGUFs somewhere else:
+
+```bash
+MODEL=/path/to/model.gguf ./scripts/start-turboquant.sh
+MODEL=/path/to/model.gguf MMPROJ=/path/to/mmproj.gguf ./scripts/start-vision.sh
 ```
 
 ## Optional: weekly health check

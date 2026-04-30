@@ -369,7 +369,7 @@ sleep 30
 
 Real image:
 ```bash
-B64=$(base64 -i ~/Desktop/photo.jpg | tr -d '\n')
+B64=$(base64 -i /path/to/photo.jpg | tr -d '\n')
 curl -s http://127.0.0.1:10503/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d "$(jq -nc --arg img "data:image/jpeg;base64,$B64" \

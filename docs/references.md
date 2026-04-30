@@ -4,7 +4,6 @@
 
 - **Video** — _Ultimate Guide Local AI Setup (Qwen3.6 + LlamaC++ + TurboQuant)_
   YouTube ID: `5jkAlqbk66A`
-  Local copy: `~/Desktop/VIDEOS TO WATCH/Qwen 3.6 macOS Local AI/Ultimate Guide Local AI Setup (Qwen3.6 + LlamaC++ + TurboQuant) [5jkAlqbk66A].mp4`
 
 ## Repos used
 

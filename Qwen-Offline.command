@@ -13,6 +13,7 @@ PORT=10501
 trap 'echo; echo "‼ Something went wrong. Press any key to close."; read -n 1 -s' ERR
 
 echo "⏳ Starting Qwen 3.6 (offline)…"
+mkdir -p logs
 
 # Already up?
 if curl -sf --max-time 1 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then

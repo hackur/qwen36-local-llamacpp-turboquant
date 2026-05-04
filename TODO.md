@@ -22,7 +22,9 @@
 
 ## P3 - release hygiene
 
-- [ ] Add a license after choosing the intended license.
+- [x] Add a license after choosing the intended license. (MIT — `LICENSE`)
 - [x] Add a changelog or release notes for `v0.0.1`.
-- [ ] Decide whether raw benchmark text outputs should stay tracked or move to generated artifacts.
+- [x] Decide whether raw benchmark text outputs should stay tracked or move to generated artifacts. (gitignored; aggregates kept in `benchmarks/RESULTS.md` and `SWEEP.md`)
 - [x] Add contribution notes for model path changes and benchmark submissions.
+- [x] Add `SECURITY.md` and document the offline-clean guarantee.
+- [x] Document non-LM-Studio install path (`docs/install-models.md`, `MODELS_ROOT` env var).

@@ -49,7 +49,10 @@ MODELS=(
   "tiny         TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf                             "
 )
 
-LMSTUDIO_ROOT="$HOME/.lmstudio/models"
+# Where to look for the upstream GGUFs. Defaults to LM Studio's cache; override
+# for users who downloaded with `huggingface-cli` or to a custom location:
+#   MODELS_ROOT=/path/to/your/ggufs ./scripts/symlink-models.sh
+LMSTUDIO_ROOT="${MODELS_ROOT:-$HOME/.lmstudio/models}"
 ok=0; missing=0
 for entry in "${MODELS[@]}"; do
   read -r alias weight mmproj <<< "$entry"

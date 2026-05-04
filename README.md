@@ -116,6 +116,22 @@ Targets:
 
 Apple M3 Max · 64 GB unified memory · macOS 26.4.1.
 
+## Minimum requirements
+
+- **Apple Silicon Mac** (M1/M2/M3/M4). x86_64 macs and Linux/Windows are out of scope — the build uses the Metal backend.
+- **macOS 14+** (tested on 26.4).
+- **Xcode Command Line Tools** (`xcode-select --install`) for the C++ compile.
+- **`brew install cmake jq`** — both used by the scripts.
+- **Free RAM** — at least 8 GB for `tiny`, 16 GB for `nemotron-4b`/`gemma4-e4b`/`crow-9b`, 32 GB for `qwen35-9b`/`gpt-oss-20b`/`qwen36-27b`/`gemma4-26b`, **64 GB for the default `qwen36-35b`**.
+- **Free disk** — about 1.5 GB for builds; models live in your existing LM Studio cache (or wherever `MODELS_ROOT=` points).
+- **No models in this repo** — see [`docs/install-models.md`](docs/install-models.md) for downloading GGUFs without LM Studio.
+
+Run `make preflight` to check all prerequisites at once. Run `make check` to lint scripts and scan for accidental personal paths.
+
+## License & contributing
+
+[`LICENSE`](LICENSE) is MIT — model weights and upstream `llama.cpp` retain their own licenses (linked from the LICENSE file). [`SECURITY.md`](SECURITY.md) covers the threat model and how to report issues. [`CONTRIBUTING.md`](CONTRIBUTING.md) has the pre-PR checklist.
+
 ## Layout
 
 ```

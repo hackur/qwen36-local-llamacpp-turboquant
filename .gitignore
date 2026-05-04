@@ -1,8 +1,23 @@
 vendor/
 logs/
+models/
 benchmarks/results-*.json
 benchmarks/mem-*.csv
+benchmarks/quality-*/
 *.gguf
 .DS_Store
 .venv/
 __pycache__/
+
+# Editor / OS
+.cursor/
+.claude/
+
+# Personal credentials — never commit
+.env
+.env.*
+*.pem
+*.key
+.netrc
+.ssh/
+secrets/

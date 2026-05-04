@@ -29,6 +29,20 @@ When adding a model alias, update:
 - `docs/usage.md` if the model needs custom launch or API notes
 - `docs/troubleshooting.md` if it has known KV-cache or chat-template quirks
 
+## Pre-publish checklist
+
+Before opening a PR or pushing to a public branch:
+
+```bash
+make check         # bash -n + privacy linter
+make preflight     # tools, builds, model symlinks
+make audit-offline # zero non-localhost sockets (only with a server up)
+```
+
+If any fails, fix and re-run. The privacy linter (`scripts/static-check.sh`)
+greps for personal paths, hostnames, and credential-shaped strings — green
+should mean "safe to publish".
+
 ## Benchmarks
 
 Benchmark submissions should include:

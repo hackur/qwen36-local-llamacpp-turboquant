@@ -21,8 +21,15 @@ Initial public release of the Apple Silicon Qwen 3.6 + llama.cpp + TurboQuant st
 - Long-context needle recovery works around 50K prompt tokens in the recorded benchmark.
 - `llama-server` uses only localhost sockets during offline validation.
 
+### Added (post-tag, pre-publish)
+
+- `LICENSE` — MIT, with attribution notes for upstream `llama.cpp` and `llama-cpp-turboquant`.
+- `SECURITY.md` — scope, reporting, and the headline guarantee (`make audit-offline`).
+- `docs/install-models.md` — how to use the stack without LM Studio (`MODELS_ROOT=...` and direct `MODEL=/path/to/file.gguf`).
+- `scripts/symlink-models.sh` — `MODELS_ROOT` env var to point at a custom GGUF directory.
+- `benchmarks/quality-*/` is now gitignored. The aggregate numbers stay in `benchmarks/RESULTS.md` + `SWEEP.md`; per-prompt outputs are regenerated on demand via `make` targets.
+
 ### Known Limits
 
 - The workflow CI file is not yet published because pushing `.github/workflows/*` requires GitHub credentials with `workflow` scope.
-- No license has been selected yet.
-- Model files are not included; users must download GGUFs separately or point `MODEL` at existing local files.
+- Model files are not included; users must download GGUFs separately (see `docs/install-models.md`) or point `MODEL` at existing local files.

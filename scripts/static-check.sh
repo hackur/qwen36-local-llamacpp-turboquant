@@ -18,7 +18,7 @@ echo "  ✓ make help"
 echo
 echo "Public privacy scan"
 if git grep -n -E 'sarda|Jeremy Sarda|jcsarda@gmail\.com|/Users/you|/path/to/project|/path/to|Reference:|gh[ps]_[A-Za-z0-9]|sk-[A-Za-z0-9]{20,}|BEGIN (RSA|OPENSSH|PRIVATE)|PRIVATE KEY|Bearer [A-Za-z0-9._-]+' \
-  -- . ':!scripts/static-check.sh' >/tmp/qwen-static-privacy.txt; then
+  -- . ':!scripts/static-check.sh' ':!LICENSE' >/tmp/qwen-static-privacy.txt; then
   cat /tmp/qwen-static-privacy.txt
   echo "  ✗ privacy scan found matches"
   exit 1

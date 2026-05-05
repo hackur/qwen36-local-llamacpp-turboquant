@@ -1,0 +1,45 @@
+# qwen-compact-proxy configuration (Phase 0).
+#
+# Phase 0 is passthrough only. Watermark / mode plumbing exists so Phase 1
+# can plug in compaction without a config break.
+
+# Address the proxy listens on. Default matches docs/compaction-strategy.md §4.
+listen:
+  host: "127.0.0.1"
+  port: 11500
+
+# Upstream llama-server (turboquant primary). Default matches scripts/start-turboquant.sh.
+upstream:
+  base_url: "http://127.0.0.1:10501"
+  # Timeout for non-streaming upstream calls (ms). Streams have no timeout.
+  request_timeout_ms: 600000
+
+# Operational mode:
+#   passthrough — never rewrite, never compact (still answers phantom expand calls).
+#   shadow      — compute the rewrite, log it, forward the ORIGINAL upstream.
+#   enforce     — compute the rewrite, forward the REWRITTEN body upstream.
+# `x-compact: off` request header bypasses everything in any mode.
+mode: "passthrough"
+
+# Watermarks. Tier 0 verbatim window + Tier 1 elision read these.
+watermarks:
+  # Fraction of n_ctx that triggers compaction (used by future tiers).
+  prompt_fraction: 0.70
+  # Single tool result above this many tokens always gets elided (Tier 1).
+  tool_result_min_tokens: 2000
+  # Fallback message-count / age trigger (used by future tiers).
+  max_messages: 40
+  max_age_turns: 20
+  # Tier 0 verbatim window (whichever is larger keeps more).
+  verbatim_keep_turns: 8
+  verbatim_keep_tokens: 8000
+
+# On-disk state. JSONL request logs and (later) cached artifacts live here.
+cache_dir: "~/.cache/qwen-compact"
+
+# Token-count LRU cache.
+tokenizer:
+  cache_entries: 4096
+
+# pino log level for the process logger (stdout). Per-request JSONL is separate.
+log_level: "info"

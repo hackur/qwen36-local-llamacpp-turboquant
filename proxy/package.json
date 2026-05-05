@@ -1,0 +1,19 @@
+{
+  "name": "qwen-compact-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Phase 0 passthrough proxy with instrumentation for the qwen36 / llama.cpp stack.",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0",
+    "pino": "^9.4.0"
+  }
+}

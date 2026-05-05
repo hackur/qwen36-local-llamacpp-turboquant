@@ -1,0 +1,11 @@
+# Tier-4 fallback compactor dependencies.
+#
+# After installing, fetch the NLTK tokenizer data once (offline thereafter):
+#   python3 -m nltk.downloader punkt punkt_tab
+#
+# These pins are the most recent stable releases known to work together as of
+# 2026-05. sumy 0.11 is the current line; numpy is needed by the LSA solver.
+
+sumy==0.11.0
+nltk>=3.9,<4.0
+numpy>=1.26,<3.0

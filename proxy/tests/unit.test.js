@@ -32,10 +32,21 @@ test("config defaults load with no override", () => {
   assert.ok(cfg.cache_dir && !cfg.cache_dir.startsWith("~"));
 });
 
-test("config rejects unimplemented modes in Phase 0", () => {
+test("config accepts shadow/enforce in Phase 1", () => {
   const prev = process.env.QWEN_COMPACT_MODE;
-  process.env.QWEN_COMPACT_MODE = "enforce";
-  assert.throws(() => loadConfig(), /not implemented in Phase 0/);
+  for (const m of ["shadow", "enforce"]) {
+    process.env.QWEN_COMPACT_MODE = m;
+    const cfg = loadConfig();
+    assert.equal(cfg.mode, m);
+  }
+  if (prev === undefined) delete process.env.QWEN_COMPACT_MODE;
+  else process.env.QWEN_COMPACT_MODE = prev;
+});
+
+test("config rejects invalid modes", () => {
+  const prev = process.env.QWEN_COMPACT_MODE;
+  process.env.QWEN_COMPACT_MODE = "bogus";
+  assert.throws(() => loadConfig(), /invalid mode/);
   if (prev === undefined) delete process.env.QWEN_COMPACT_MODE;
   else process.env.QWEN_COMPACT_MODE = prev;
 });

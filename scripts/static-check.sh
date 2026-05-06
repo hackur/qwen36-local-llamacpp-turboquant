@@ -11,6 +11,19 @@ for f in scripts/*.sh Qwen-Offline.command; do
 done
 
 echo
+echo "Python syntax"
+for f in scripts/*.py; do
+  python3 -m py_compile "$f"
+  printf "  ✓ %s\n" "$f"
+done
+
+echo
+echo "Python tests"
+python3 -m unittest discover -s tests >/tmp/qwen-static-tests.log 2>&1 \
+  && printf "  ✓ %s\n" "$(grep -E '^Ran [0-9]+ test' /tmp/qwen-static-tests.log | tail -1)" \
+  || { tail -40 /tmp/qwen-static-tests.log; echo "  ✗ unittest failures"; exit 1; }
+
+echo
 echo "Makefile help"
 make help >/dev/null
 echo "  ✓ make help"

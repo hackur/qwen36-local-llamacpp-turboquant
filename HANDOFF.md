@@ -114,3 +114,117 @@ Walked through every documented `make` target / script / API example and fixed w
 | `clients/web-demo.html` static audit | zero external resources, only `127.0.0.1` fetches |
 
 Updated `docs/offline-mode.md` (removed stale `pip install openai` step) and `docs/troubleshooting.md` (added the 3 gotchas above).
+
+---
+
+## Compaction proxy
+
+Reverse proxy in front of `llama-server` that observes (and, eventually, rewrites)
+the OpenAI Chat Completions message array to keep long agentic sessions
+coherent. Design: [`docs/compaction-strategy.md`](docs/compaction-strategy.md).
+Operator quickstart: [`docs/proxy.md`](docs/proxy.md).
+
+**Built (Phase 0 + Phase 1):**
+- Node/Fastify proxy at `proxy/src/`, listens on `:11500`, forwards to `:10501`,
+  SSE preserved including `[DONE]`. Per-request JSONL logging to
+  `~/.cache/qwen-compact/logs/YYYY-MM-DD.jsonl`.
+- Three modes: `passthrough` (log only), `shadow` (compute rewrite, log it,
+  forward original), `enforce` (forward rewritten body). `x-compact: off`
+  request header bypasses everything.
+- Phase 1 Tier-1 elision: tool-result truncation + `expand_tool_result` phantom
+  tool. Token accounting via upstream `/tokenize` with an LRU.
+- Replay + needle harness under `proxy/eval/` (50-turn fixture, regex grader).
+  Unit + stub-upstream integration tests under `proxy/tests/`.
+
+**Stubbed (Phase 2/3):**
+- Phase 2 small-model recursive summarization. `proxy/scripts/start-summarizer.sh`
+  exists but the proxy doesn't yet call out to a second port.
+- Phase 3 KV-cache cooperation (stable-prefix discipline, slot save/restore,
+  session keying). Watermarks are in `config.yaml` but not enforced.
+- Phase 4/5 (structured notes, sumy fallback) untouched.
+
+**Run:**
+```bash
+cd proxy && npm install && npm start
+# or: make proxy-install && make proxy-start
+```
+Point the client at `http://127.0.0.1:11500`. Smoke test: `make proxy-smoke`.
+
+**Logs:** `~/.cache/qwen-compact/logs/YYYY-MM-DD.jsonl` (request rows), proxy
+stdout (pino). The cache dir is outside the repo by design.
+
+---
+
+## Round 4 — model swap
+
+Swapped the default from **Qwen3.6-35B-A3B Q6_K** (MoE) to **Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE Q5_K_M** (dense, ~19.5 GB weights). New alias: `qwen36-neo`. The 35B-A3B is now `MODEL_FALLBACK`.
+
+### Rationale
+- **Uncensored** — Heretic finetune removes refusal layers for unrestricted local use.
+- **Code-tuned** — NEO-CODE pass targets coding workloads, our most common use case.
+- **Quality** — Q5_K_M on a 27B dense model beats both prior options for our setup: the 27B was previously running at IQ2_XXS (lossy) and the 35B-A3B at Q6_K (great quality but MoE active-params dilute coding precision).
+- **Native 256K** — `n_ctx_train = 262144`. No rope-scaling needed.
+
+### What changed in code (4 files)
+- `scripts/_common.sh` — `MODEL_PRIMARY=qwen36-neo`, prior 35B becomes `MODEL_FALLBACK`.
+- `Makefile` — new `start-qwen36-neo` target; default `start` resolves to it.
+- `scripts/symlink-models.sh` — adds the new model + mmproj symlink lines.
+- `models/qwen36-neo.gguf` + `models/qwen36-neo.mmproj.gguf` — new symlinks into the LM Studio cache.
+
+### Measurements (M3 Max 64 GB, --ngl 99, -fa, turbo3 K+V, --jinja, temp=0.6 top_p=0.95 top_k=20)
+
+**Memory at boot:**
+
+| Component | Size |
+|---|---|
+| Weights | 18 626 MiB GPU + 833 MiB CPU = ~19.5 GB |
+| KV @ turbo3 128K | 1 944 MiB |
+| KV @ turbo3 256K | 3 888 MiB → **15.2 KiB/tok** (vs ~64 KiB/tok f16) |
+| Recurrent state | 149.62 MiB (constant — only 16 of 64 layers carry KV) |
+| Total VRAM @ 128K | 20.4 GB / 53 GB Metal limit |
+| Total VRAM @ 256K | 22.7 GB / 53 GB Metal limit (~30 GB headroom) |
+
+**Sustained gen (3-run avg, 500-token gen, thinking off):**
+
+| Profile | Gen tok/s | Prompt tok/s |
+|---|---|---|
+| 128K turbo3 | **14** (run-to-run 4.75–14.49) | 78 |
+| 256K turbo3 | 7 | 53 |
+
+**TTFT (10-token gen, thinking off):**
+
+| Prompt size | Wall | Prompt tok/s |
+|---|---|---|
+| 41 | 1.86 s | 67 |
+| 512 | 6.27 s | 105 |
+| 5 K | 40.3 s | 127 |
+| 20 K | 157 s | 100 |
+
+### Tradeoffs
+- **Dense → slower than MoE.** 14 tok/s gen vs the prior 63 tok/s @ 64K is a real regression in raw throughput; the 35B-A3B only had to activate 3B params per token.
+- **But:** better per-token quality (Q5 dense beats IQ2 dense and is competitive with Q6 MoE on code), uncensored, and 256K trained context (4× the 64K we ran the 35B at). For agentic + coding work the context headroom matters more than tok/s.
+- **Run-to-run variance is high** (4.75–14.49 gen tok/s) — likely background-load sensitive on a 64 GB machine running ~22 GB VRAM. Watch this if it gets worse.
+
+---
+
+## Round 5 — REPL rewrite
+
+Rewrote `scripts/demo-chat.sh` as a Python module. Three real bugs the user hit, each with a real root cause:
+
+1. **Thinking output was invisible.** The bash reader inspected only `delta.content` and silently dropped `delta.reasoning_content`, so Qwen 3.6 thinking turns looked like a long pause followed by a final answer.
+2. **Markdown lists collapsed onto one line.** Streamed chunks occasionally carried stray C0 control bytes that corrupted the user's terminal (cursor moves, erase-line). Now sanitized per chunk.
+3. **Phantom `qwen>` reply on bare Enter.** Whitespace-only input was POSTed to the server. Now filtered before any HTTP work.
+
+### Files added/changed
+- `scripts/demo-chat.py` — new, ~440 lines, stdlib only.
+- `scripts/demo-chat.sh` — now a 7-line shim that execs the Python.
+- `tests/test_demo_chat.py` — new, 33 tests covering the SSE parser, sanitizer, history pruning, slash commands, env-var compat, and exit codes.
+- `scripts/static-check.sh` — now also runs `python3 -m unittest discover -s tests`.
+- `docs/demo-chat.md` — new user reference.
+- `README.md` — recipe row links to the new doc.
+
+### Test stats
+33 tests, fully offline (no llama-server needed), ~1 s wall time. Wired into `make check`.
+
+### Architecture
+Single file, stdlib only. Pure functions for SSE parsing (`parse_sse_stream`), C0 sanitization (`sanitize_chunk`), and history pruning (`prune_to_chars`) — they take iterables and return iterables, so unit tests feed them byte fixtures with no sockets. I/O is isolated in a `StreamConnection` object that owns the urllib request and a cancel flag, so SIGINT during streaming flips the flag, closes the response cleanly, and returns to the prompt without leaking the connection or losing history.

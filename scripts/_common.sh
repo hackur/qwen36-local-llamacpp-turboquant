@@ -2,13 +2,14 @@
 # Shared env for start scripts.
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Primary alias — `qwen36-35b` resolves to ./models/qwen36-35b.gguf via symlink-models.sh
-MODEL_PRIMARY="$REPO/models/qwen36-35b.gguf"
-MMPROJ_PRIMARY="$REPO/models/qwen36-35b.mmproj.gguf"
+# Primary alias — Qwen 3.6 27B Heretic-Uncensored NEO-CODE Q5_K_M (~19.5 GB dense, 256K n_ctx_train).
+# Resolves to ./models/qwen36-neo.gguf via symlink-models.sh.
+MODEL_PRIMARY="$REPO/models/qwen36-neo.gguf"
+MMPROJ_PRIMARY="$REPO/models/qwen36-neo.mmproj.gguf"
 
-# Fallback — Qwen3.6-27B IQ2_XXS
-MODEL_FALLBACK="$REPO/models/qwen36-27b.gguf"
-MMPROJ_FALLBACK="$REPO/models/qwen36-27b.mmproj.gguf"
+# Fallback — Qwen3.6-35B-A3B Q6_K (MoE, prior default). 27B IQ2_XXS still available as `qwen36-27b`.
+MODEL_FALLBACK="$REPO/models/qwen36-35b.gguf"
+MMPROJ_FALLBACK="$REPO/models/qwen36-35b.mmproj.gguf"
 
 # resolve_model <alias-or-path>
 #   Sets RESOLVED_MODEL and RESOLVED_MMPROJ in the *current* shell (no subshell capture).

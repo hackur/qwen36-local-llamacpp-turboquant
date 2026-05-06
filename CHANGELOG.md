@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Default model swapped** from `qwen36-35b` (Qwen3.6-35B-A3B Q6_K MoE) to `qwen36-neo` (Qwen3.6-27B Heretic-Uncensored NEO-CODE Q5_K_M dense, ~19.5 GB). Native 256K context (`n_ctx_train`), uncensored, code-tuned. `qwen36-35b` is preserved as `MODEL_FALLBACK` in `scripts/_common.sh`.
+- `scripts/demo-chat.sh` rewritten as `scripts/demo-chat.py` (stdlib-only Python module). The shell file is now a one-line shim. Fixes three real bugs: invisible thinking output, C0-control corruption of streamed markdown, and phantom replies on bare-Enter input.
+- `scripts/static-check.sh` now also runs `python3 -m unittest discover -s tests`.
+
+### Added
+
+- `start-qwen36-neo` Makefile target.
+- Compaction reverse proxy at `proxy/` (Node/Fastify, `:11500` → `:10501`) with passthrough/shadow/enforce modes, Tier-1 elision (tool-result truncation + `expand_tool_result` phantom tool), and per-request JSONL logging. Operator quickstart in `docs/proxy.md`.
+- Make targets: `proxy-install`, `proxy-test`, `proxy-start`, `proxy-smoke`.
+- `summarizeElidedIds()` helper in `proxy/src/tier1.js` to bound `x-rewrite-stats` response-header size.
+- Replay + needle eval harness under `proxy/eval/` (50-turn fixture, regex grader, mock-proxy tests).
+- Proxy unit + stub-upstream integration tests under `proxy/tests/`.
+- `tests/test_demo_chat.py` (33 stdlib-only cases for the REPL).
+- `docs/demo-chat.md` user reference for the rewritten REPL.
+- Round-4 / Round-5 sections in `HANDOFF.md` documenting the model swap measurements and REPL rewrite.
+- `qwen36-neo` rows in `benchmarks/SWEEP.md` and `docs/kv-cache-math.md` with measured KV-cache footprints (15.2 KiB/tok at turbo3, ~22.7 GB total VRAM @ 256K).
+
+### Fixed
+
+- `proxy/python/compact.py`: short prose under the token budget no longer collapses to a single sentence — fast-path passes through verbatim. Regression covered by a new test.
+
 ## v0.0.1
 
 Initial public release of the Apple Silicon Qwen 3.6 + llama.cpp + TurboQuant stack.

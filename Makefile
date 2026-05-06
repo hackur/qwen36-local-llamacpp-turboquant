@@ -3,9 +3,10 @@ SHELL := bash
 .DEFAULT_GOAL := help
 
 .PHONY: help build start start-baseline start-tiny start-nemotron start-crow \
-        start-gemma4-e4b start-qwen35-9b start-gpt-oss start-gemma4-26b start-qwen36-27b \
+        start-gemma4-e4b start-qwen35-9b start-gpt-oss start-gemma4-26b start-qwen36-27b start-qwen36-neo \
         stop status info info-watch bench needle demo open preflight check \
-        install-launchd uninstall-launchd clean audit-offline models
+        install-launchd uninstall-launchd clean audit-offline models \
+        proxy-install proxy-test proxy-start proxy-smoke
 
 help:
 	@awk 'BEGIN{FS=":.*##"; printf "Targets:\n"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -67,6 +68,10 @@ start-qwen36-27b: ## Start Qwen 3.6 27B IQ2_XXS (~9 GB dense)
 	@mkdir -p logs
 	MODEL=qwen36-27b CTX=32768 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
 
+start-qwen36-neo: ## Start Qwen 3.6 27B NEO-CODE Heretic Q5_K_M (~19.5 GB dense, current DEFAULT)
+	@mkdir -p logs
+	MODEL=qwen36-neo ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
+
 stop: ## Stop all llama-server processes from this repo
 	./scripts/stop-all.sh
 
@@ -106,6 +111,54 @@ uninstall-launchd: ## Remove launchd auto-start
 clean: ## Wipe build artifacts (does NOT delete vendor/ source)
 	rm -rf vendor/llama.cpp-mainline/build vendor/llama-cpp-turboquant/build
 	@echo "✓ build dirs removed. run 'make build' to rebuild."
+
+proxy-install: ## Install compaction proxy npm dependencies
+	cd proxy && npm install
+
+proxy-test: ## Run compaction proxy unit + stub-upstream tests
+	cd proxy && npm test
+
+proxy-start: ## Start compaction proxy on :11500 (foreground, forwards to :10501)
+	cd proxy && npm start
+
+proxy-smoke: ## Best-effort end-to-end smoke: llama-server + proxy + needle + curl
+	@set -e; \
+	mkdir -p logs; \
+	started_server=0; started_proxy=0; \
+	if curl -sf --max-time 1 http://127.0.0.1:10501/health >/dev/null 2>&1; then \
+		echo "▶ llama-server already up on :10501"; \
+	else \
+		echo "▶ starting llama-server (turboquant)"; \
+		./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 & \
+		started_server=$$!; \
+		for i in $$(seq 1 60); do \
+			curl -sf --max-time 1 http://127.0.0.1:10501/health >/dev/null 2>&1 && break; \
+			sleep 1; \
+		done; \
+	fi; \
+	if curl -sf --max-time 1 http://127.0.0.1:11500/health >/dev/null 2>&1; then \
+		echo "▶ proxy already up on :11500"; \
+	else \
+		echo "▶ starting proxy on :11500"; \
+		(cd proxy && npm start > ../logs/proxy.log 2>&1) & \
+		started_proxy=$$!; \
+		for i in $$(seq 1 30); do \
+			curl -sf --max-time 1 http://127.0.0.1:11500/health >/dev/null 2>&1 && break; \
+			sleep 1; \
+		done; \
+	fi; \
+	trap 'if [[ $$started_proxy -ne 0 ]]; then kill $$started_proxy 2>/dev/null || true; fi; \
+	      if [[ $$started_server -ne 0 ]]; then kill $$started_server 2>/dev/null || true; fi' EXIT; \
+	echo "▶ regenerating needle fixture"; \
+	python3 proxy/eval/needle.py generate --out proxy/eval/fixtures/needle_50turns.jsonl >/dev/null; \
+	echo "▶ curl round-trip via :11500"; \
+	curl -sf http://127.0.0.1:11500/v1/chat/completions \
+		-H "Content-Type: application/json" \
+		-d '{"model":"local","messages":[{"role":"user","content":"Reply with the single word OK."}],"max_tokens":20,"chat_template_kwargs":{"enable_thinking":false}}' \
+		| python3 -c 'import json,sys; r=json.loads(sys.stdin.read(),strict=False); print("✓ proxy reply:", r["choices"][0]["message"]["content"].strip())'; \
+	echo "▶ tail of today's JSONL log:"; \
+	logf="$$HOME/.cache/qwen-compact/logs/$$(date +%Y-%m-%d).jsonl"; \
+	if [[ -f "$$logf" ]]; then tail -1 "$$logf"; else echo "(no log file yet at $$logf)"; fi
 
 audit-offline: ## Confirm llama-server has zero non-localhost sockets
 	@PID=$$(pgrep -f vendor/llama-cpp-turboquant.*llama-server | head -1); \

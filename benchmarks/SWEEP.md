@@ -80,3 +80,43 @@ KV cache @ 64 K turbo3 = 742 MiB → ~12 KiB/tok. f16 at 64 K would be ~16 GiB �
 - Concurrent requests at -np > 1: server starts with -np 1 by design (single-user offline use case). Easy to re-test.
 - Speculative decoding with a draft model: requires Qwen2-0.5B GGUF and `-md` flag — left as a follow-up.
 - TURBO_SPARSE_V=0 ablation: the default value works; ablation pending if quality regressions appear in real workloads.
+
+## qwen36-neo (Qwen3.6-27B Heretic NEO-CODE Q5_K_M)
+
+Dense, ~19.5 GB weights. Hybrid Qwen3.6 architecture: 16 of 64 layers carry KV (attn + Gated Delta Net). Native `n_ctx_train = 262144` — no rope-scaling. Settings: `--ngl 99 -fa` on, turbo3 K+V, `--jinja`, sampling `temp=0.6 top_p=0.95 top_k=20`, thinking off.
+
+### Memory observed at runtime
+
+| Component | 128K | 256K |
+|---|---|---|
+| Weights (GPU + CPU) | 18 626 + 833 MiB | 18 626 + 833 MiB |
+| KV cache (turbo3) | 1 944 MiB | 3 888 MiB |
+| Recurrent state | 149.62 MiB | 149.62 MiB |
+| **Total VRAM** | **20.4 GB** | **22.7 GB** |
+| Free vs 53 GB Metal limit | 32.6 GB | 30.3 GB |
+
+KV @ turbo3 = **15.2 KiB/tok** (vs ~64 KiB/tok at f16 measured by LM Studio on this same model). 4.2× compression — smaller ratio than the 35B-A3B's 22× because this dense Q5 model has fewer KV-carrying layers proportionally and a baseline f16 KV that's already tighter.
+
+### Sustained generation (server, 3-run avg, 500-token gen)
+
+| Profile | Gen tok/s | Prompt tok/s | Context |
+|---|---|---|---|
+| **turboquant turbo3** | **14** | 78 | **128K** |
+| turboquant turbo3 | 7 | 53 | 256K |
+
+Run-to-run variance @ 128K: 4.75–14.49 gen tok/s. Dense 27B at Q5 is the floor — the prior MoE 35B-A3B Q6_K hit 63 / 322 @ 64K because only ~3B params were active per token. Tradeoff: -78% gen, +100–300% context, uncensored + code-tuned.
+
+### TTFT (time-to-first-token) at 4 prompt sizes
+
+| Prompt size (tokens) | Wall | Prompt tok/s |
+|---|---|---|
+| 41 | 1.86 s | 67 |
+| 512 | 6.27 s | 105 |
+| 5 016 | 40.3 s | 127 |
+| 20 516 | 157 s | 100 |
+
+Prompt processing peaks ~127 tok/s in the 5K range, drops back to ~100 at 20K. KV writes dominate at long prompts.
+
+### Capacity headroom
+
+256K is the model's `n_ctx_train`. With 30 GB VRAM still free at 256K turbo3, the hardware is not the bottleneck — the trained context window is.

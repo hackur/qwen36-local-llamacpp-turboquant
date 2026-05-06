@@ -134,6 +134,28 @@ class TestCompact(unittest.TestCase):
         self.assertEqual(proc.stdout, "")
         self.assertTrue(proc.stderr.strip(), "should log to stderr")
 
+    def test_small_input_under_budget_passes_through(self):
+        # Regression: when total prose fits inside token_budget, sumy's
+        # n_request heuristic (len(prose)//80) used to floor at 1 and
+        # silently drop everything but the highest-ranked sentence. The fix
+        # short-circuits the under-budget case to verbatim pass-through.
+        # Both sentences below MUST appear in the output.
+        user_msg = "Quick sanity check on the proxy."
+        asst_msg = "The proxy is up on port 10500 and responding to /health with 200 OK."
+        payload = {
+            "messages": [
+                {"role": "user", "content": user_msg},
+                {"role": "assistant", "content": asst_msg},
+            ],
+            "previous_summary": "",
+            "token_budget": 1500,
+            "algorithm": "lexrank",
+        }
+        code, out, err = _run(payload)
+        self.assertEqual(code, 0, msg=err)
+        self.assertIn(user_msg, out)
+        self.assertIn(asst_msg, out)
+
     def test_empty_messages_succeeds_empty(self):
         payload = {
             "messages": [],

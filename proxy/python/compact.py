@@ -168,11 +168,24 @@ def summarize(prose: str, token_budget: int, algorithm: str) -> str:
     from sumy.nlp.tokenizers import Tokenizer
 
     parser = PlaintextParser.from_string(prose, Tokenizer("english"))
+
+    # Fast path: if the whole prose already fits inside the budget there is
+    # nothing to extract — pass it through verbatim. Without this the
+    # n_request heuristic below can ask sumy for a single sentence on tiny
+    # inputs and silently drop the rest, even though the budget allows it.
+    sentences = list(parser.document.sentences)
+    if not sentences:
+        return ""
+    if estimate_tokens(prose) <= token_budget:
+        return " ".join(str(s).strip() for s in sentences if str(s).strip())
+
     summarizer = _build_summarizer(algorithm)
 
     # Ask sumy for many sentences; we'll stop greedily once we hit the budget.
     # The cap (200) prevents pathological docs from spending forever ranking.
-    n_request = min(200, max(1, len(prose) // 80))
+    # Floor at the actual sentence count so we never under-request on docs
+    # whose char-count happens to be small relative to the 80-char heuristic.
+    n_request = min(200, max(len(sentences), len(prose) // 80, 1))
     ranked = summarizer(parser.document, n_request)
 
     picked = []

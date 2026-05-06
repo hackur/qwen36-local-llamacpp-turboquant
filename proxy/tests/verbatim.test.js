@@ -71,6 +71,64 @@ test("pickVerbatim: token bound exceeds turn bound (keeps more)", () => {
   assert.equal(r.verbatimIndices.size, 11);
 });
 
+test("pickVerbatim: keepTurns=0 keepTokens=0 still keeps system + last user (no crash)", () => {
+  const msgs = [
+    { role: "system", content: "sys" },
+    { role: "assistant", content: "old" },
+    { role: "user", content: "current" },
+  ];
+  const r = pickVerbatim(msgs, { keepTurns: 0, keepTokens: 0 });
+  assert.equal(r.verbatimIndices.has(0), true, "system");
+  assert.equal(r.verbatimIndices.has(2), true, "last user");
+  // Assistant in the middle is evictable.
+  assert.deepEqual(r.evictableIndices, [1]);
+});
+
+test("pickVerbatim: every message is system → no evictable, no crash", () => {
+  const msgs = [
+    { role: "system", content: "a" },
+    { role: "system", content: "b" },
+    { role: "system", content: "c" },
+  ];
+  const r = pickVerbatim(msgs, { keepTurns: 0, keepTokens: 0 });
+  assert.equal(r.verbatimIndices.size, 3);
+  assert.deepEqual(r.evictableIndices, []);
+});
+
+test("pickVerbatim: single user message → kept, no crash", () => {
+  const r = pickVerbatim([{ role: "user", content: "hi" }], {
+    keepTurns: 0,
+    keepTokens: 0,
+  });
+  assert.equal(r.verbatimIndices.has(0), true);
+  assert.deepEqual(r.evictableIndices, []);
+});
+
+test("pickVerbatim: single assistant message (no user) → evictable, no crash", () => {
+  const r = pickVerbatim([{ role: "assistant", content: "hi" }], {
+    keepTurns: 0,
+    keepTokens: 0,
+  });
+  // No user to preserve, no system, all bounds = 0 → message is evictable.
+  assert.deepEqual(r.evictableIndices, [0]);
+});
+
+test("pickVerbatim: null/undefined messages array does not crash", () => {
+  assert.doesNotThrow(() => pickVerbatim(null, {}));
+  assert.doesNotThrow(() => pickVerbatim(undefined, {}));
+  const r = pickVerbatim(null, {});
+  assert.deepEqual(r.evictableIndices, []);
+});
+
+test("pickVerbatim: messages with null entries do not crash", () => {
+  const msgs = [
+    { role: "system", content: "sys" },
+    null,
+    { role: "user", content: "hi" },
+  ];
+  assert.doesNotThrow(() => pickVerbatim(msgs, {}));
+});
+
 test("pickVerbatim: last user always preserved even with tiny K", () => {
   const msgs = [
     { role: "system", content: "sys" },

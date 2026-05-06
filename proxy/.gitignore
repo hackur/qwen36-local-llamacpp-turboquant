@@ -1,3 +1,14 @@
 node_modules/
 package-lock.json
 *.log
+
+# Python venv for the (optional) summarizer / eval helpers
+python/.venv/
+.venv/
+
+# Transient working dirs
+tmp/
+
+# Eval fixtures emitted by scripts (the canonical fixture is checked in;
+# regenerated/temporary copies are not)
+eval/fixtures/*.tmp.jsonl

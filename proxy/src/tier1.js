@@ -211,6 +211,31 @@ export const TIER1_DEFAULTS = {
   minTokens: 2000,
 };
 
+// Safe serialization of `elidedIds` for HTTP response headers.
+// Most servers (and proxies in front of them) cap a single response header at
+// ~8-16KB. With long tool_call_ids this list can blow that budget. Callers
+// should use this helper instead of stuffing the raw array into a header.
+//
+// Returns { ids, total_count, truncated } where `ids` is at most `maxIds` long
+// and the JSON encoding is bounded by `maxBytes` (default 4096, well under
+// typical 8KB header limits even after the surrounding `x-rewrite-stats` JSON).
+export function summarizeElidedIds(ids, opts = {}) {
+  const maxIds = opts.maxIds ?? 64;
+  const maxBytes = opts.maxBytes ?? 4096;
+  const arr = Array.isArray(ids) ? ids : [];
+  const total = arr.length;
+  let kept = arr.slice(0, maxIds);
+  // Tighten further if the JSON-encoded form would still bust maxBytes.
+  while (kept.length > 0 && Buffer.byteLength(JSON.stringify(kept), "utf8") > maxBytes) {
+    kept = kept.slice(0, Math.max(1, Math.floor(kept.length / 2)));
+  }
+  return {
+    ids: kept,
+    total_count: total,
+    truncated: kept.length < total,
+  };
+}
+
 // Phantom tool definition the model can call to rehydrate elided results.
 export const EXPAND_TOOL_DEFINITION = {
   type: "function",

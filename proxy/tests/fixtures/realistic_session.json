@@ -1,0 +1,153 @@
+[
+  { "role": "system", "content": "You are a coding agent." },
+  { "role": "user", "content": "Find the auth bug in src/auth.py and fix it." },
+  {
+    "role": "assistant",
+    "content": "I'll investigate.",
+    "tool_calls": [
+      { "id": "call_001", "type": "function", "function": { "name": "Read", "arguments": "{\"file_path\":\"src/auth.py\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_001", "content": "1: import jwt\n2: import time\n3:\n4: def verify(token):\n5:     payload = jwt.decode(token, verify=False)\n6:     return payload\n... (423 lines total)" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_002", "type": "function", "function": { "name": "Grep", "arguments": "{\"pattern\":\"verify=False\",\"path\":\"src/\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_002", "content": "src/auth.py:5\nsrc/legacy/old_auth.py:12\n2 matches" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_003", "type": "function", "function": { "name": "Read", "arguments": "{\"file_path\":\"src/auth.py\",\"offset\":80,\"limit\":40}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_003", "content": "80: def authenticate(req):\n81:     token = req.headers.get('Authorization')\n82:     return verify(token)" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_004", "type": "function", "function": { "name": "Bash", "arguments": "{\"command\":\"pytest tests/auth/ -x\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_004", "content": "============================= test session starts =============================\nplatform darwin -- Python 3.12.0\ncollected 12 items\n\ntests/auth/test_verify.py::test_valid_token PASSED\ntests/auth/test_verify.py::test_expired FAILED\ntests/auth/test_verify.py::test_tampered FAILED\ntests/auth/test_verify.py::test_missing FAILED\nexit code: 1\n3 failures, 1 passed" },
+  {
+    "role": "assistant",
+    "content": [
+      { "type": "text", "text": "Three failures. Let me check the test." },
+      { "type": "tool_use", "id": "toolu_005", "name": "Read", "input": { "file_path": "tests/auth/test_verify.py" } }
+    ]
+  },
+  {
+    "role": "user",
+    "content": [
+      { "type": "tool_result", "tool_use_id": "toolu_005", "content": [{ "type": "text", "text": "import pytest\nfrom auth import verify\n\ndef test_expired():\n    with pytest.raises(jwt.ExpiredSignatureError):\n        verify(EXPIRED_TOKEN)" }] }
+    ]
+  },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_006", "type": "function", "function": { "name": "Edit", "arguments": "{\"file_path\":\"src/auth.py\",\"old_string\":\"def verify(token):\\n    payload = jwt.decode(token, verify=False)\\n    return payload\",\"new_string\":\"def verify(token):\\n    payload = jwt.decode(token, SECRET, algorithms=['HS256'])\\n    return payload\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_006", "content": "Edit applied successfully" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_007", "type": "function", "function": { "name": "Bash", "arguments": "{\"command\":\"pytest tests/auth/ -x\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_007", "content": "NameError: name 'SECRET' is not defined\nexit code: 1" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_008", "type": "function", "function": { "name": "Grep", "arguments": "{\"pattern\":\"SECRET|JWT_KEY\",\"path\":\"src/\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_008", "content": "src/config.py:14:JWT_KEY = os.environ['JWT_KEY']" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_009", "type": "function", "function": { "name": "Edit", "arguments": "{\"file_path\":\"src/auth.py\",\"old_string\":\"import jwt\\nimport time\",\"new_string\":\"import jwt\\nimport time\\nfrom .config import JWT_KEY\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_009", "content": "applied" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_010", "type": "function", "function": { "name": "Edit", "arguments": "{\"file_path\":\"src/auth.py\",\"old_string\":\"jwt.decode(token, SECRET, algorithms=['HS256'])\",\"new_string\":\"jwt.decode(token, JWT_KEY, algorithms=['HS256'])\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_010", "content": "applied" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_011", "type": "function", "function": { "name": "Write", "arguments": "{\"file_path\":\"tests/auth/conftest.py\",\"content\":\"import os\\nos.environ.setdefault('JWT_KEY','test-secret-do-not-use-in-prod')\\n\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_011", "content": "wrote 78 bytes" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_012", "type": "function", "function": { "name": "Bash", "arguments": "{\"command\":\"pytest tests/auth/ -x\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_012", "content": "12 passed in 0.84s\nexit code: 0" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_013", "type": "function", "function": { "name": "Glob", "arguments": "{\"pattern\":\"**/*.py\",\"path\":\"src\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_013", "content": "src/auth.py\nsrc/config.py\nsrc/main.py\nsrc/legacy/old_auth.py" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_014", "type": "function", "function": { "name": "Read", "arguments": "{\"file_path\":\"src/legacy/old_auth.py\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_014", "content": "# DEPRECATED, see src/auth.py\ndef verify(token):\n    return jwt.decode(token, verify=False)" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_015", "type": "function", "function": { "name": "WebFetch", "arguments": "{\"url\":\"https://pyjwt.readthedocs.io/en/stable/usage.html\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_015", "content": "PyJWT usage docs: jwt.decode(token, key, algorithms=['HS256']) is the recommended pattern. The verify=False parameter was removed in v2.0." },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_016", "type": "function", "function": { "name": "MysteryTool", "arguments": "{\"alpha\":\"one\",\"beta\":2,\"gamma\":\"three\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_016", "content": "{\"status\":\"ok\",\"items\":42}" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_017", "type": "function", "function": { "name": "ProjectScan", "arguments": "{\"include\":[\"*.py\"],\"exclude\":[\"tests/\"],\"max_files\":100}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_017", "content": "scanned 47 files; 0 lint issues" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_018", "type": "function", "function": { "name": "Bash", "arguments": "{\"command\":\"git diff --stat\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_018", "content": " src/auth.py            | 4 ++--\n tests/auth/conftest.py | 2 ++\n 2 files changed, 4 insertions(+), 2 deletions(-)" },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_019", "type": "function", "function": { "name": "Bash", "arguments": "{\"command\":\"git commit -am 'fix(auth): verify JWT signature using JWT_KEY'\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_019", "content": "[main 9f3a2b1] fix(auth): verify JWT signature using JWT_KEY\n 2 files changed, 4 insertions(+), 2 deletions(-)" },
+  { "role": "assistant", "content": "Fixed. Verified the signature, wired JWT_KEY from config, added conftest, all 12 tests pass." },
+  { "role": "user", "content": "Now also delete src/legacy/old_auth.py since it has the same bug." },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      { "id": "call_020", "type": "function", "function": { "name": "Bash", "arguments": "{\"command\":\"rm src/legacy/old_auth.py && git add -A && git commit -m 'chore: remove deprecated old_auth.py'\"}" } }
+    ]
+  },
+  { "role": "tool", "tool_call_id": "call_020", "content": "[main a7b1c0d] chore: remove deprecated old_auth.py\n 1 file changed, 3 deletions(-)" }
+]

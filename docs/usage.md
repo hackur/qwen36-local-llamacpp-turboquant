@@ -17,13 +17,14 @@ Decide by **memory budget** first, **task** second.
 
 | You have… | Use |
 |---|---|
-| 64 GB RAM, want best quality, 100K+ context | `qwen36-35b` (default) |
+| 64 GB RAM, want uncensored + code-tuned, **256K context** | `qwen36-neo` (default) |
+| 64 GB RAM, want highest gen tok/s on long context | `qwen36-35b` (now fallback; MoE, faster but 128K ceiling) |
 | 64 GB RAM, want a Gemma flavor for variety | `gemma4-26b` |
 | 64 GB RAM, want OpenAI-style behavior | `gpt-oss-20b` |
 | 32 GB RAM | `qwen35-9b`, `gemma4-e4b`, `crow-9b` |
 | 16 GB RAM | `nemotron-4b` |
 | Battery life mode / quick smoke test | `tiny` |
-| Vision (images) on a heavy model | `qwen36-35b` or `gemma4-26b` |
+| Vision (images) on a heavy model | `qwen36-neo`, `qwen36-35b`, or `gemma4-26b` |
 | Vision on a small model | `qwen35-9b` (best quality) or `gemma4-e4b` |
 
 `make models` shows what's installed.
@@ -34,15 +35,26 @@ Decide by **memory budget** first, **task** second.
 
 Each recipe shows: how to start, the right `KV`/`CTX`, the model's strengths, a sample prompt, and the actual reply you should see.
 
-### `qwen36-35b` — default flagship (Qwen 3.6 35B-A3B MoE)
+### `qwen36-neo` — default (Qwen 3.6 27B Heretic-Uncensored NEO-CODE Q5_K_M, dense)
 
 **Start:**
 ```bash
-make start                              # uses turbo3, 128K ctx
-# equivalent: MODEL=qwen36-35b CTX=131072 KV=turbo3 ./scripts/start-turboquant.sh
+make start                              # uses turbo3, defaults from start-turboquant.sh
+# equivalent: MODEL=qwen36-neo KV=turbo3 ./scripts/start-turboquant.sh
 ```
 
-**Strengths:** Highest quality on this hardware, **128K context** with TurboQuant, MoE architecture means only ~3 B params are active per token (fast generation despite 35 B total). Vision-capable via `mmproj`.
+**Strengths:** Uncensored + code-tuned dense 27B at Q5_K_M. **Native 256K context** (`n_ctx_train = 262144`, no rope-scaling). Hybrid Qwen3.6 architecture — 16 of 64 layers carry KV — keeps the KV cache small (15.2 KiB/tok at turbo3, ~22.7 GB total VRAM at 256K). Vision-capable via `mmproj`. See [`benchmarks/SWEEP.md`](../benchmarks/SWEEP.md#qwen36-neo-qwen36-27b-heretic-neo-code-q5_k_m) for sustained throughput numbers.
+
+**Tradeoff vs the prior `qwen36-35b` MoE default:** ~14 tok/s @ 128K (dense Q5) vs ~63 tok/s @ 64K (MoE Q6 with ~3B active params). Slower per token, but 4× the trained context, uncensored, and code-tuned.
+
+### `qwen36-35b` — fallback (Qwen 3.6 35B-A3B MoE)
+
+**Start:**
+```bash
+MODEL=qwen36-35b CTX=131072 KV=turbo3 ./scripts/start-turboquant.sh
+```
+
+**Strengths:** Highest gen tok/s on this hardware (61–63 tok/s sustained), **128K context** with TurboQuant, MoE architecture means only ~3 B params are active per token. Vision-capable via `mmproj`. Now `MODEL_FALLBACK` in `scripts/_common.sh` — kept for raw-throughput workloads.
 
 **Sample prompt — reasoning (with chain-of-thought):**
 ```bash
@@ -346,7 +358,7 @@ curl -s http://127.0.0.1:10501/v1/chat/completions \
   | jq -r '.choices[0].message.content'
 ```
 
-For prompts above ~50 K tokens, `qwen36-35b` is the only model with the trained context. For 8K–32K, any model works.
+For prompts above ~50 K tokens, `qwen36-neo` (256K trained, default) and `qwen36-35b` (128K trained, fallback) are the only models with the trained context. For 8K–32K, any model works.
 
 **Verify it actually used the long context:**
 ```bash
@@ -382,7 +394,7 @@ curl -s http://127.0.0.1:10503/v1/chat/completions \
   | jq -r '.choices[0].message.content'
 ```
 
-Vision models on this stack: `qwen36-35b`, `qwen36-27b`, `gemma4-26b`, `gemma4-e4b`, `qwen35-9b`, `crow-9b`. Confirm via `make models` (look for the 🖼 marker in `make info`).
+Vision models on this stack: `qwen36-neo`, `qwen36-35b`, `qwen36-27b`, `gemma4-26b`, `gemma4-e4b`, `qwen35-9b`, `crow-9b`. Confirm via `make models` (look for the 🖼 marker in `make info`).
 
 ---
 

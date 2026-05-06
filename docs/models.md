@@ -13,7 +13,8 @@ Or use a per-model Make target — these come with sensible defaults for KV cach
 
 | Target | Alias | What it loads |
 |---|---|---|
-| `make start` | `qwen36-35b` | primary, 128K ctx, turbo3 KV |
+| `make start` | `qwen36-neo` | **default**, dense 27B Heretic NEO-CODE Q5_K_M, native 256K ctx, turbo3 KV |
+| `make start-qwen36-neo` | `qwen36-neo` | same as `make start` |
 | `make start-qwen36-27b` | `qwen36-27b` | dense 27B IQ2_XXS, 32K |
 | `make start-gemma4-26b` | `gemma4-26b` | Gemma 4 26B-A4B MoE, 32K, turbo3 |
 | `make start-gpt-oss` | `gpt-oss-20b` | OpenAI 20B MXFP4, 32K, **q8_0 KV** (turbo3 unsupported) |
@@ -27,6 +28,7 @@ Or use a per-model Make target — these come with sensible defaults for KV cach
 
 | Alias | Family | Params | Quant | Size | Vision (mmproj)? | turbo3? |
 |---|---|---|---|---|---|---|
+| `qwen36-neo` | Qwen 3.6 27B Heretic NEO-CODE (uncensored, code-tuned) | dense | Q5_K_M | 19.5 GB | ✓ | ✓ |
 | `qwen36-35b` | Qwen 3.6 35B-A3B | MoE 35B / 3B-active | Q6_K | 28.5 GB | ✓ | ✓ |
 | `qwen36-27b` | Qwen 3.6 27B | dense | IQ2_XXS | 9.4 GB | ✓ | ✓ |
 | `gemma4-26b` | Gemma 4 26B-A4B | MoE | Q4_K_M | 16.8 GB | ✓ | ✓ |
@@ -43,6 +45,7 @@ Or use a per-model Make target — these come with sensible defaults for KV cach
 
 | Alias | KV | Gen tok/s |
 |---|---|---|
+| qwen36-neo | turbo3 | 14 (128K) / 7 (256K) — dense Q5, see [`benchmarks/SWEEP.md`](../benchmarks/SWEEP.md#qwen36-neo-qwen36-27b-heretic-neo-code-q5_k_m) |
 | qwen36-35b | turbo3 | 61–63 |
 | gemma4-26b | turbo3 | 80.5 |
 | gpt-oss-20b | q8_0 | 77.6 |
@@ -62,15 +65,17 @@ Or use a per-model Make target — these come with sensible defaults for KV cach
 
 So MoE-A3B is "have your cake and eat it" on a 64 GB unified-memory Mac. The 27B IQ2_XXS stays around purely for the case where another big app eats the RAM.
 
-## Why 35B-A3B over 27B dense
+## Why `qwen36-neo` is the new default
 
-35B-A3B is a Mixture-of-Experts model with **35 B total parameters but only ~3 B active per token**. On M3 Max:
+Round 4 swap. Previous default was `qwen36-35b` (28.5 GB MoE Q6_K). New default is `qwen36-neo` — Qwen 3.6 27B dense with the Heretic-Uncensored + NEO-CODE finetunes at Q5_K_M.
 
-- it loads ~3× heavier than the 27B (28 GB vs 9 GB) — fits 64 GB easily,
-- it generates **faster** because per-token compute is ~3 B (vs 27 B dense),
-- and quality is higher than the 27B dense.
+- **Uncensored.** Heretic strips refusal layers. No friction on legitimate local prompts that the upstream tune flags.
+- **Code-tuned.** NEO-CODE pass biases the model toward coding workloads — our most common use case here.
+- **Quality at higher quant.** Dense Q5_K_M beats the 27B IQ2_XXS by a wide margin and is competitive with the 35B-A3B Q6 on coding tasks (the MoE's per-token active params are only ~3B).
+- **Native 256K context.** `n_ctx_train = 262144`, no rope-scaling. The 35B-A3B was trained for 128K.
+- **Cost.** Dense 27B at Q5 generates slower (~14 tok/s @ 128K vs ~63 tok/s on the 35B-A3B @ 64K) — that's the tradeoff. For agentic + long-context work, we picked context and quality over raw throughput.
 
-So MoE-A3B is "have your cake and eat it" on a 64 GB unified-memory Mac. The 27B IQ2_XXS stays around purely for the case where another big app eats the RAM.
+`qwen36-35b` is preserved as `MODEL_FALLBACK` in `scripts/_common.sh` and is still selectable via `MODEL=qwen36-35b ./scripts/start-turboquant.sh`.
 
 ## Path stability risk
 

@@ -23,6 +23,7 @@ matching what `huggingface-cli download` lays out by default):
 
 | Alias | Path under `$MODELS_ROOT` |
 |---|---|
+| `qwen36-neo` (default) | `DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M.gguf` (+ `mmproj-F32.gguf`) |
 | `qwen36-35b` | `lmstudio-community/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-Q6_K.gguf` (+ `mmproj-Qwen3.6-35B-A3B-BF16.gguf`) |
 | `qwen36-27b` | `unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-IQ2_XXS.gguf` (+ `mmproj-F32.gguf`) |
 | `gemma4-26b` | `lmstudio-community/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-Q4_K_M.gguf` (+ `mmproj-gemma-4-26B-A4B-it-BF16.gguf`) |
@@ -55,11 +56,11 @@ If you don't want LM Studio at all:
 brew install huggingface-cli   # or: pip install -U "huggingface_hub[cli]"
 
 # Default destination is $HF_HOME (typically ~/.cache/huggingface). Pass
-# --local-dir to mirror LM Studio's layout. Example for qwen36-35b:
-mkdir -p ~/ggufs/lmstudio-community/Qwen3.6-35B-A3B-GGUF
-huggingface-cli download lmstudio-community/Qwen3.6-35B-A3B-GGUF \
-  Qwen3.6-35B-A3B-Q6_K.gguf mmproj-Qwen3.6-35B-A3B-BF16.gguf \
-  --local-dir ~/ggufs/lmstudio-community/Qwen3.6-35B-A3B-GGUF \
+# --local-dir to mirror LM Studio's layout. Example for the default qwen36-neo:
+mkdir -p ~/ggufs/DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF
+huggingface-cli download DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF \
+  Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M.gguf mmproj-F32.gguf \
+  --local-dir ~/ggufs/DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF \
   --local-dir-use-symlinks False
 
 # then:
@@ -72,7 +73,7 @@ The download itself needs network; once done, everything is offline.
 
 ```bash
 make models      # confirms what's wired up
-make start       # default model: qwen36-35b
+make start       # default model: qwen36-neo
 ```
 
 If you only downloaded a smaller model, edit your default with

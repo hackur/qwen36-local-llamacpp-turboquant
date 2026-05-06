@@ -29,7 +29,7 @@ So `742 MiB / 65 536 tok / 131 072 dim ≈ 0.09 byte/dim ≈ 0.71 bit/dim`.
 
 That's *less* than a literal 2-bit quant — turbo3's "3" refers to nominal bits/weight; the storage layout adds overhead and the sparse-V dequantization further packs values that are near-zero.
 
-## Comparison table — same model, different KV types
+## Comparison table — same model (35B-A3B), different KV types
 
 Estimated total KV memory at 64K context:
 
@@ -42,6 +42,19 @@ Estimated total KV memory at 64K context:
 | turbo2 | ~2 | ~8 KiB | ~0.5 GiB | ~1 GiB |
 
 (numbers approximate — actual depends on n_kv_head, sparse-V density, and runtime layout)
+
+## qwen36-neo (Qwen3.6-27B Heretic NEO-CODE Q5_K_M) — measured
+
+Same hybrid Qwen3.6 architecture (attn + Gated Delta Net, **16 of 64 layers carry KV**, same as the 35B-A3B), so per-token math is similar despite the dense vs MoE difference. Measured from server logs:
+
+| Context | KV cache (turbo3) | bytes/token |
+|---|---|---|
+| 128K | 1 944 MiB | **15.2 KiB/tok** |
+| 256K | 3 888 MiB | **15.2 KiB/tok** |
+
+f16 KV on this same model (measured by LM Studio): **~64 KiB/tok**. So turbo3 vs f16 here is **~4.2× compression** — a smaller ratio than the 35B-A3B's 22× headline above, because the f16 baseline on this dense Q5 model is already tighter (the 256 KiB/tok f16 number for the 35B was an estimate using nominal head counts; actual f16 on a hybrid model is much lower because only 16/64 layers contribute).
+
+Recurrent state (constant 149.62 MiB regardless of ctx) accounts for the 48 non-KV layers' Gated Delta Net state — fixed-size, doesn't scale with tokens.
 
 ## What this enables on this hardware
 

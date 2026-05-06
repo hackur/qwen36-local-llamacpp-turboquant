@@ -1,11 +1,12 @@
 # Multimodal (vision) — per-model recipes
 
-Six models in this stack are vision-capable. Each ships with a matching `mmproj` file (vision projector) that gets symlinked alongside the weights:
+Seven models in this stack are vision-capable. Each ships with a matching `mmproj` file (vision projector) that gets symlinked alongside the weights:
 
 | Alias | mmproj quant | Size of mmproj | Notes |
 |---|---|---|---|
-| `qwen36-35b` | BF16 | 0.9 GB | best quality |
-| `qwen36-27b` | F32 | 1.8 GB | dense 27B fallback |
+| `qwen36-neo` | F32 | 1.8 GB | **default**, dense 27B Heretic NEO-CODE Q5_K_M |
+| `qwen36-35b` | BF16 | 0.9 GB | MoE 35B-A3B (now fallback) |
+| `qwen36-27b` | F32 | 1.8 GB | dense 27B IQ2_XXS |
 | `gemma4-26b` | BF16 | 1.2 GB | Gemma 4 vision |
 | `gemma4-e4b` | BF16 | 1.0 GB | small Gemma 4 vision |
 | `qwen35-9b` | BF16 | 0.9 GB | Qwen 3.5 vision (older) |
@@ -17,7 +18,7 @@ Six models in this stack are vision-capable. Each ships with a matching `mmproj`
 
 ```bash
 make stop                                     # vision needs its own server
-MODEL=qwen36-35b PORT=10503 ./scripts/start-vision.sh > logs/vision.log 2>&1 &
+MODEL=qwen36-neo PORT=10503 ./scripts/start-vision.sh > logs/vision.log 2>&1 &
 sleep 30                                      # ~30 s to load weights + mmproj on M3 Max
 ./scripts/test-vision.sh                      # generates a 32×32 PNG and asks for color
 ```
@@ -52,7 +53,7 @@ make stop
 MODEL=qwen35-9b PORT=10503 ./scripts/start-vision.sh > logs/vision.log 2>&1 &
 ```
 
-`MODEL=` accepts any of the six vision aliases listed above. The script auto-finds the matching `<alias>.mmproj.gguf` next to the weights symlink.
+`MODEL=` accepts any of the seven vision aliases listed above. The script auto-finds the matching `<alias>.mmproj.gguf` next to the weights symlink.
 
 ## Two servers at once: text + vision
 

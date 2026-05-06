@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Pre-push gate: refuse to push if the public privacy scan finds anything.
+# Enable by symlinking into .git/hooks (see CONTRIBUTING.md):
+#   ln -sf ../../scripts/git-hooks/pre-push .git/hooks/pre-push
+set -euo pipefail
+REPO="$(git rev-parse --show-toplevel)"
+cd "$REPO"
+echo "[pre-push] running privacy scan"
+make privacy-scan || exit 1

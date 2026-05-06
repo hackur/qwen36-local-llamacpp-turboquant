@@ -1,4 +1,4 @@
-# System info (captured 2026-04-27)
+# System info (captured 2026-05-06)
 
 | | |
 |---|---|

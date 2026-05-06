@@ -55,11 +55,16 @@ SAMPLING=(--temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0)
 # even when default-on; clients can flip it off per-request.
 COMMON=(-ngl 99 -fa on -np 1 --host 127.0.0.1 --jinja)
 
+# port-guard:v1 — abort if $1 is already bound by a LISTEN socket.
+# Uses lsof (local-only, no network) so this stays offline-safe.
+# LM Studio commonly squats on :1234; our servers use 10500/10501/10502/10503.
 ensure_port_free() {
   local port="$1"
-  if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
-    echo "❌ Port $port already in use. Is LM Studio's server (default :1234) or another llama-server running?"
-    lsof -nP -iTCP:"$port" -sTCP:LISTEN
+  local pids
+  pids="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null || true)"
+  if [[ -n "$pids" ]]; then
+    echo "❌ Port $port already in use. Is LM Studio's server (default :1234) or another llama-server running?" >&2
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN >&2 || true
     exit 1
   fi
 }

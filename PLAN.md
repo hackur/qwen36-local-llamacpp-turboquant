@@ -1,5 +1,7 @@
 # Plan — Qwen 3.6 + llama.cpp + TurboQuant (offline-first, Apple Silicon)
 
+> **Historical artifact.** This is the original 41-task scoping doc from project kickoff. It is preserved for traceability but is no longer the source of truth. For current status see [`TODO.md`](TODO.md); for a chronological narrative of what actually shipped see [`HANDOFF.md`](HANDOFF.md); for release notes see [`CHANGELOG.md`](CHANGELOG.md).
+
 Goal: the **fastest, most reliable** local Qwen 3.6 setup on this M3 Max that **works with the network off**. Built around the YouTube guide _Ultimate Guide Local AI Setup (Qwen3.6 + LlamaC++ + TurboQuant) [5jkAlqbk66A]_ and the public TurboQuant repos.
 
 ## Hardware/OS baseline

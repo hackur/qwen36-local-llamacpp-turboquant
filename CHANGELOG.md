@@ -24,6 +24,16 @@
 ### Fixed
 
 - `proxy/python/compact.py`: short prose under the token budget no longer collapses to a single sentence — fast-path passes through verbatim. Regression covered by a new test.
+- `proxy/src/server.js` `sniffUsage()`: previously a flat regex (`\{[^}]*\}`) that bailed at the first inner `}`, so `completion_tokens` was always logged as `null` for real llama-server responses (which nest `prompt_tokens_details` inside `usage`). Replaced with a brace-balancing parser that handles nested objects, escaped quotes, and braces inside string content. Regression covered by `proxy/tests/sniff-usage.test.js` (7 cases).
+
+### Verified live (proxy round-trip against llama-server :10501)
+
+- Basic chat (non-streaming + SSE).
+- Tool calling: function definitions forward, `tool_calls` come back, `tool_choice:"auto"` honoured. Streaming tool-call deltas pass through with `[DONE]` terminator.
+- Tool-result round-trip: assistant `tool_calls` + `role:"tool"` reply + follow-up assistant message all produce a grounded answer.
+- Tier-1 elision under live conditions: 44 K-token request with a 36 KB tool result outside the verbatim window compacted to 36 K tokens (`elided_tool_result_ids:["call_BIG"]`), original persisted to `~/.cache/qwen-compact/tool-results/<id>.json`, stub message carries `<tool_result id=... bytes=N first_lines=...>` preview.
+- `expand_tool_result` phantom-tool interception: assistant call to `expand_tool_result(id=...)` is answered locally from the cache before the upstream sees it; `phantom_answered:["call_X1"]` recorded in the JSONL row.
+- `proxy/tests/integration.sh` extended with two new checks (non-streaming tool call, tool-result round-trip, plus an `x-debug-rewritten` contract check). Suite: 9/9 pass against live `:10501` + `:11500`.
 
 ## v0.0.1
 

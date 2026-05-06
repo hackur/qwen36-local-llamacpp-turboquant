@@ -55,7 +55,7 @@ Or double-click **`Qwen-Offline.command`** in Finder — starts the server and p
 | Strict JSON output | `response_format: {"type":"json_schema", ...}` | [`docs/usage.md`](docs/usage.md#json--structured-output) |
 | Switch model on the fly | `make stop && make start-gemma4-26b` | [`docs/usage.md`](docs/usage.md#switching-models-live-stop-and-swap) |
 | Streaming tokens (curl/python/JS) | three working examples | [`docs/usage.md`](docs/usage.md#streaming-chat--three-languages) |
-| Context compaction for long agentic sessions | transparent proxy on `:11500` in front of `:10501` | [`docs/proxy.md`](docs/proxy.md) |
+| Context compaction for long agentic sessions | transparent proxy on `:11500` in front of `:10501` (tool calling + SSE preserved) | [`docs/proxy.md`](docs/proxy.md) |
 | See live status / memory / network | `make info` or `make info-watch` | scripts/info.sh |
 | Confirm offline-clean | `make audit-offline` | scripts/info.sh |
 

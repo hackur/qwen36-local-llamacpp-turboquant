@@ -10,9 +10,13 @@ output.
 
 - Listens on `:11500` and forwards every request to `llama-server` on `:10501`.
 - SSE streams pass through verbatim, including `[DONE]`.
+- **Tool calling works unchanged** — function definitions, `tool_calls`,
+  `tool_choice`, and tool-result messages round-trip through the proxy. Both
+  streaming and non-streaming forms are covered by `proxy/tests/integration.sh`.
 - Tokenizes the incoming `messages` array via the upstream `/tokenize` endpoint
-  and writes a per-request JSONL log line. That log is the dataset Phase 1+
-  watermark tuning is built on.
+  and writes a per-request JSONL log line (`prompt_tokens`, `completion_tokens`,
+  `latency_ms`, `rewrite` stats). That log is the dataset Phase 1+ watermark
+  tuning is built on.
 - Adds an `x-proxy-request-id` response header that matches the JSONL row.
 
 Phase 0 (instrumentation) and Phase 1 (Tier-1 tool-result elision +
@@ -109,6 +113,45 @@ JSONL row. It tears down only what it started — if a server was already on
 `:10501`, it's left alone.
 
 Prerequisites: Node 18+, Python 3, and `make build` already complete.
+
+## Verifying it end-to-end
+
+With both servers up:
+
+```bash
+# unit (no servers needed)
+cd proxy && npm test                       # 86 tests
+
+# integration (needs llama-server :10501 + proxy :11500)
+bash proxy/tests/integration.sh
+```
+
+The integration script exercises: `/v1/models`, `/proxy/info`, non-streaming
+chat, SSE streaming, **non-streaming tool calls**, **tool-result round-trip**,
+the `x-debug-rewritten: 1` short-circuit (returns `{}` plus an
+`x-rewrite-stats` header without touching upstream), and the `x-compact: off`
+bypass.
+
+For a quick manual tool-calling probe through the proxy:
+
+```bash
+curl -s http://127.0.0.1:11500/v1/chat/completions \
+  -H 'content-type: application/json' \
+  -d '{
+    "model":"local",
+    "messages":[{"role":"user","content":"Use get_weather to check Paris."}],
+    "tools":[{"type":"function","function":{"name":"get_weather",
+      "parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}],
+    "max_tokens":150,
+    "chat_template_kwargs":{"enable_thinking":false}
+  }' | jq '.choices[0].message.tool_calls'
+```
+
+To inspect what Tier-1 elision *would* do without forwarding (works in any
+mode): add `-H 'x-debug-rewritten: 1'`. The proxy returns `200 {}` plus an
+`x-rewrite-stats` header (`{"orig_tokens":N,"rewritten_tokens":M,"elided_tool_result_ids":[...]}`)
+and either an inline `x-rewritten-messages` header (when small) or an
+`x-rewritten-sidecar` path pointing at `~/.cache/qwen-compact/debug/<id>.json`.
 
 ## See also
 

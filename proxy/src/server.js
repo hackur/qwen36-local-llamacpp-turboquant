@@ -58,16 +58,51 @@ function readBody(req) {
 }
 
 // Look for {"usage":{"prompt_tokens":X,"completion_tokens":Y,...}} in a buffer.
-// Cheap regex sniff — we don't need to be perfect, just useful for logs.
-function sniffUsage(text) {
-  const m = text.match(/"usage"\s*:\s*\{[^}]*\}/);
-  if (!m) return null;
-  try {
-    const obj = JSON.parse(`{${m[0]}}`);
-    return obj.usage || null;
-  } catch {
+// llama-server emits a nested object (`prompt_tokens_details:{cached_tokens:N}`),
+// so we walk braces with a depth counter rather than using a flat regex —
+// otherwise the match stops at the first inner `}` and JSON.parse fails.
+// Skips over braces inside strings (incl. escaped quotes) so embedded JSON
+// strings don't confuse the depth counter.
+export function sniffUsage(text) {
+  const key = '"usage"';
+  let i = text.lastIndexOf(key);
+  while (i !== -1) {
+    let j = i + key.length;
+    while (j < text.length && /\s/.test(text[j])) j++;
+    if (text[j] !== ":") {
+      i = text.lastIndexOf(key, i - 1);
+      continue;
+    }
+    j++;
+    while (j < text.length && /\s/.test(text[j])) j++;
+    if (text[j] !== "{") {
+      i = text.lastIndexOf(key, i - 1);
+      continue;
+    }
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    for (let k = j; k < text.length; k++) {
+      const ch = text[k];
+      if (esc) { esc = false; continue; }
+      if (ch === "\\") { esc = true; continue; }
+      if (ch === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          try {
+            return JSON.parse(text.slice(j, k + 1));
+          } catch {
+            return null;
+          }
+        }
+      }
+    }
     return null;
   }
+  return null;
 }
 
 export function createProxyServer({

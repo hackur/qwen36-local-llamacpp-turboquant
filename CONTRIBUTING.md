@@ -39,9 +39,22 @@ make preflight     # tools, builds, model symlinks
 make audit-offline # zero non-localhost sockets (only with a server up)
 ```
 
-If any fails, fix and re-run. The privacy linter (`scripts/static-check.sh`)
-greps for personal paths, hostnames, and credential-shaped strings — green
-should mean "safe to publish".
+If any fails, fix and re-run. The privacy linter (`scripts/privacy-scan.sh`,
+also invoked by `make check`) greps for personal paths, hostnames, and
+credential-shaped strings — green should mean "safe to publish".
+
+### Enable the pre-push hook
+
+To make `git push` refuse to publish when the privacy scan is red, symlink
+the repo's hook template into your local `.git/hooks/` once per clone:
+
+```bash
+ln -sf ../../scripts/git-hooks/pre-push .git/hooks/pre-push
+```
+
+The hook runs `make privacy-scan` and aborts the push on any match. We do
+not auto-install it during `make build` — modifying `.git/` silently would
+be hostile.
 
 ## Benchmarks
 

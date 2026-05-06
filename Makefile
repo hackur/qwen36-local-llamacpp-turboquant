@@ -6,7 +6,8 @@ SHELL := bash
         start-gemma4-e4b start-qwen35-9b start-gpt-oss start-gemma4-26b start-qwen36-27b start-qwen36-neo \
         stop status info info-watch bench needle demo open preflight check \
         install-launchd uninstall-launchd clean audit-offline models \
-        proxy-install proxy-test proxy-start proxy-smoke
+        proxy-install proxy-test proxy-start proxy-smoke \
+        privacy-scan prepush
 
 help:
 	@awk 'BEGIN{FS=":.*##"; printf "Targets:\n"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -159,6 +160,12 @@ proxy-smoke: ## Best-effort end-to-end smoke: llama-server + proxy + needle + cu
 	echo "▶ tail of today's JSONL log:"; \
 	logf="$$HOME/.cache/qwen-compact/logs/$$(date +%Y-%m-%d).jsonl"; \
 	if [[ -f "$$logf" ]]; then tail -1 "$$logf"; else echo "(no log file yet at $$logf)"; fi
+
+privacy-scan: ## Grep tree for personal paths, names, and credential-shaped strings
+	./scripts/privacy-scan.sh
+
+prepush: ## Pre-push gate — must be green before any public push
+	@$(MAKE) privacy-scan
 
 audit-offline: ## Confirm llama-server has zero non-localhost sockets
 	@PID=$$(pgrep -f vendor/llama-cpp-turboquant.*llama-server | head -1); \

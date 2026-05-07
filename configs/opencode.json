@@ -7,7 +7,7 @@
       "options": { "baseURL": "http://127.0.0.1:10501/v1" },
       "models": {
         "qwen3.6-turboquant": {
-          "name": "Qwen3.6-35B-A3B Q6_K · turbo3 KV · 128K",
+          "name": "Qwen3.6 (primary) · turbo3 KV · 128K",
           "limit": { "context": 131072, "output": 32000 }
         }
       }

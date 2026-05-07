@@ -5,6 +5,8 @@ import { UpstreamClient } from "./upstream.js";
 import { TokenizerClient } from "./tokenizer.js";
 import { JsonlLogger } from "./jsonl-logger.js";
 import { createProxyServer } from "./server.js";
+import { createEngine } from "./hooks/engine.js";
+import { resolveHandler } from "./hooks/registry.js";
 
 async function main() {
   const config = loadConfig();
@@ -34,12 +36,36 @@ async function main() {
 
   const jsonl = new JsonlLogger({ cacheDir: config.cache_dir });
 
+  // Hook engine — only built when config.hooks.enabled. Empty registry =
+  // pass-through (byte-identical) per docs/hooks-middleware.md §12.
+  let hooks = null;
+  if (config.hooks?.enabled && Array.isArray(config.hooks.handlers)) {
+    hooks = createEngine({ logger });
+    for (const h of config.hooks.handlers) {
+      if (!h?.handler || !h?.phase) continue;
+      try {
+        const fn = await resolveHandler(h.handler);
+        hooks.register(h.phase, {
+          id: h.id || h.handler,
+          handler: fn,
+          filter: h.filter || null,
+          priority: h.priority,
+          timeout_ms: h.timeout_ms ?? config.hooks.default_timeout_ms,
+          config: h.config || {},
+        });
+      } catch (err) {
+        logger.warn({ err: err.message, handler: h.handler }, "hook registration failed");
+      }
+    }
+  }
+
   const server = createProxyServer({
     config,
     upstream,
     tokenizer,
     jsonl,
     logger,
+    hooks,
   });
 
   server.listen(config.listen.port, config.listen.host, () => {

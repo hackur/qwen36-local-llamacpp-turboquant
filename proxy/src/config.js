@@ -64,6 +64,13 @@ const DEFAULTS = {
     enabled: false,
     target_sentences: 5,
   },
+  // Phase 6 — hook engine + middleware (docs/hooks-middleware.md v0.2). Off by
+  // default. When `enabled: false` or `handlers: []`, byte-identical to today.
+  hooks: {
+    enabled: false,
+    default_timeout_ms: 50,
+    handlers: [],
+  },
 };
 
 const VALID_MODES = new Set(["passthrough", "shadow", "enforce"]);

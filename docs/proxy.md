@@ -160,8 +160,55 @@ mode): add `-H 'x-debug-rewritten: 1'`. The proxy returns `200 {}` plus an
 and either an inline `x-rewritten-messages` header (when small) or an
 `x-rewritten-sidecar` path pointing at `~/.cache/qwen-compact/debug/<id>.json`.
 
+## Hooks / middleware (Phase 6)
+
+**Status:** engine + 5 built-in handlers implemented (off by default).
+Spec: [`hooks-middleware.md`](hooks-middleware.md) v0.2.
+
+The hook engine provides a stable extension surface for new compaction
+behaviours without touching `server.js` / `rewrite.js`. MVP wires
+`request:received`, `request:before-rewrite`, `request:after-rewrite`,
+and `request:before-upstream-send` phases. Stream/response phases are
+specced but not yet dispatched.
+
+Empty-registry guarantee: when `hooks.enabled: false` (default) or
+`hooks.handlers: []`, the request flow is byte-identical to today —
+`hasHooksFor` short-circuits before any context allocation.
+
+Built-in handlers (see `proxy/src/hooks/`):
+
+- `built-in:tag-bash-read-elisions` — tags `elided:bash:<id>` /
+  `elided:read:<id>` for Bash/Read tool calls that Tier 1 elided.
+- `built-in:context-pressure-reminder` — when prompt fraction >
+  threshold, injects a `<reminder>` system/user note before the final
+  user turn.
+- `built-in:prose-summarize` — calls the Phase-2 summarizer on prose
+  tool-result bodies; off unless `config.summarizer_url` is set.
+- `built-in:once-per-session` — demonstrates the `tag` + early-return
+  pattern; injects a session-init system message exactly once per
+  `x-session-id`.
+- `built-in:session-hint-loader` — reads a small file at
+  `ctx.sessionHintPath` (or `hookConfig.path`) and prepends it as a
+  system message.
+
+Enable in `proxy/config.yaml`:
+
+```yaml
+hooks:
+  enabled: true
+  default_timeout_ms: 50
+  handlers:
+    - id: tag-bash-read
+      phase: "request:after-rewrite"
+      handler: "built-in:tag-bash-read-elisions"
+```
+
+Per-request JSONL gains `hook_tags`, `hook_timings_ms`,
+`total_hook_time_ms`, and `hook_errors` (when present).
+
 ## See also
 
+- [`hooks-middleware.md`](hooks-middleware.md) — hook engine spec (v0.2).
 - [`compaction-strategy.md`](compaction-strategy.md) — full design (§9 phased plan).
 - [`../proxy/README.md`](../proxy/README.md) — config keys and JSONL schema.
 - [`../proxy/eval/README.md`](../proxy/eval/README.md) — replay + needle harness.

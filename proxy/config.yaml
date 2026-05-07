@@ -84,3 +84,12 @@ notes:
 sumy:
   enabled: false
   target_sentences: 5
+
+# Phase 6 — hook engine + middleware (docs/hooks-middleware.md v0.2). Off by
+# default. When disabled or `handlers:` empty, request flow is byte-identical.
+# Each handler entry: { handler: "built-in:<id>" | "./relative.js#export",
+#                       phase, priority?, timeout_ms?, filter?, config? }
+hooks:
+  enabled: false
+  default_timeout_ms: 50
+  handlers: []

@@ -25,6 +25,7 @@ import {
   extractStablePrefix,
   createSessionStore,
 } from "./session.js";
+import { createContext } from "./hooks/engine.js";
 
 // Inline-header budget for x-rewritten-messages. Header size is the
 // load-bearing constraint here; HTTP servers commonly accept ~8KB per header
@@ -110,13 +111,21 @@ export function sniffUsage(text) {
   return null;
 }
 
+// Empty-registry sentinel: a no-op object with the same shape as a real engine.
+const NULL_HOOKS = {
+  hasHooksFor() { return false; },
+  async dispatch() {},
+};
+
 export function createProxyServer({
   config,
   upstream,
   tokenizer,
   jsonl,
   logger,
+  hooks,
 }) {
+  const hookEngine = hooks || NULL_HOOKS;
   const upstreamUrl = config.upstream.base_url.replace(/\/+$/, "");
 
   // Phase 3 — session store. Always constructed so logging/tests can introspect
@@ -149,6 +158,44 @@ export function createProxyServer({
     const messageCount = Array.isArray(parsed?.messages)
       ? parsed.messages.length
       : null;
+
+    // Hook context — allocated lazily only when at least one phase is wired.
+    // Empty-registry guard preserves byte-identity (no allocation, no dispatch).
+    const hookCtxNeeded =
+      hookEngine.hasHooksFor("request:received") ||
+      hookEngine.hasHooksFor("request:before-rewrite") ||
+      hookEngine.hasHooksFor("request:after-rewrite") ||
+      hookEngine.hasHooksFor("request:before-upstream-send");
+    const hookCtx = hookCtxNeeded
+      ? createContext({
+          requestId,
+          start,
+          rawBody: body,
+          headers: req.headers,
+          compactOff,
+          isStreaming,
+          model,
+          parsed,
+          messages: parsed?.messages || null,
+          nCtx: upstream?.nCtx || 0,
+        })
+      : null;
+
+    async function maybeAbort(res) {
+      if (!hookCtx?._aborted) return false;
+      const { statusCode, body } = hookCtx._abortPayload || {
+        statusCode: 400,
+        body: { error: { message: "aborted by hook" } },
+      };
+      res.writeHead(statusCode, { "content-type": "application/json" });
+      res.end(JSON.stringify(body));
+      return true;
+    }
+
+    if (hookCtx && hookEngine.hasHooksFor("request:received")) {
+      await hookEngine.dispatch("request:received", hookCtx);
+      if (await maybeAbort(res)) return;
+    }
 
     // Phase 3 instrumentation. No-op for downstream behavior; sessionKey and
     // prefix stats end up on the JSONL record only when `session.enabled`.
@@ -218,6 +265,18 @@ export function createProxyServer({
       }
     }
 
+    // request:before-rewrite — after phantom expand, before rewriteRequest.
+    if (hookCtx && !compactOff && parsed && hookEngine.hasHooksFor("request:before-rewrite")) {
+      hookCtx.promptTokens = promptTokens;
+      hookCtx.promptTokenFraction =
+        promptTokens && upstream?.nCtx ? promptTokens / upstream.nCtx : null;
+      hookCtx.messages = parsed.messages;
+      await hookEngine.dispatch("request:before-rewrite", hookCtx);
+      if (await maybeAbort(res)) return;
+      // Hook may have replaced messages.
+      if (hookCtx.messages !== parsed.messages) parsed.messages = hookCtx.messages;
+    }
+
     // Rewrite pipeline (Tier 0 + Tier 1). Always run when not opted-out, so
     // that x-debug-rewritten and shadow-mode logging both work regardless of
     // mode. Wrap in try/catch — compaction must never crash a request.
@@ -240,6 +299,15 @@ export function createProxyServer({
         );
         rewrite = null;
       }
+    }
+
+    // request:after-rewrite — observation + tagging on rewrite output.
+    if (hookCtx && hookEngine.hasHooksFor("request:after-rewrite")) {
+      hookCtx.rewrite = rewrite;
+      hookCtx.outboundMessages = rewrite?.rewrittenBody?.messages || parsed?.messages || null;
+      hookCtx.elidedIds = rewrite?.stats?.elided_tool_result_ids || [];
+      await hookEngine.dispatch("request:after-rewrite", hookCtx);
+      if (await maybeAbort(res)) return;
     }
 
     // Debug-rewrite contract (proxy/eval/README.md): short-circuit BEFORE any
@@ -304,6 +372,16 @@ export function createProxyServer({
         },
         "shadow rewrite (not forwarded)",
       );
+    }
+
+    // request:before-upstream-send — last chance to swap the outbound buffer.
+    if (hookCtx && hookEngine.hasHooksFor("request:before-upstream-send")) {
+      hookCtx.outboundBuf = outboundBuf;
+      await hookEngine.dispatch("request:before-upstream-send", hookCtx);
+      if (await maybeAbort(res)) return;
+      if (hookCtx.outboundBuf && hookCtx.outboundBuf !== outboundBuf) {
+        outboundBuf = hookCtx.outboundBuf;
+      }
     }
 
     const upstreamHeaders = copyHeaders(req.headers);
@@ -395,6 +473,13 @@ export function createProxyServer({
           }
         : null,
     };
+    if (hookCtx) {
+      record.hook_tags = [...hookCtx.tags];
+      if (hookCtx.hookErrors.length > 0) record.hook_errors = hookCtx.hookErrors;
+      record.hook_timings_ms = hookCtx.hookTimingsMs;
+      record.total_hook_time_ms = Object.values(hookCtx.hookTimingsMs)
+        .reduce((a, b) => a + b, 0);
+    }
     jsonl.write(record);
     logger.debug(record, "request complete");
   }

@@ -1,0 +1,19 @@
+{"role": "system", "content": "You facilitate architecture review meetings; record decisions explicitly."}
+{"role": "user", "content": "Should we keep Postgres or move analytics to Clickhouse?"}
+{"role": "assistant", "content": "AGREED [D-01]: keep Postgres for OLTP; introduce Clickhouse only for analytics tables exceeding 50M rows. The orchestration layer routes requests through the broker and the consumer commits offsets after each batch. Backpressure is handled by the upstream queue and recovered via dead-letter retries with bounded exponential delays. "}
+{"role": "user", "content": "What about retention?"}
+{"role": "assistant", "content": "AGREED [D-02]: retention is 90 days hot, 365 cold; cold tier is S3 Glacier. The orchestration layer routes requests through the broker and the consumer commits offsets after each batch. Backpressure is handled by the upstream queue and recovered via dead-letter retries with bounded exponential delays. "}
+{"role": "user", "content": "Open question: who owns the migration runbook?"}
+{"role": "assistant", "content": "UNRESOLVED [D-03]: ownership pending — platform team to nominate by Friday. The orchestration layer routes requests through the broker and the consumer commits offsets after each batch. Backpressure is handled by the upstream queue and recovered via dead-letter retries with bounded exponential delays. "}
+{"role": "user", "content": "And the rollback plan?"}
+{"role": "assistant", "content": "NEEDLE[decision-heavy-01]: rollback uses snapshot tag rb-2026-05-07-T1 stored in s3://infra-snapshots/rb/.\nAGREED [D-04]: rollback contract documented above. The orchestration layer routes requests through the broker and the consumer commits offsets after each batch. Backpressure is handled by the upstream queue and recovered via dead-letter retries with bounded exponential delays. "}
+{"role": "user", "content": "Costs?"}
+{"role": "assistant", "content": "AGREED [D-05]: monthly budget cap $4,200 for Clickhouse cluster. The orchestration layer routes requests through the broker and the consumer commits offsets after each batch. Backpressure is handled by the upstream queue and recovered via dead-letter retries with bounded exponential delays. "}
+{"role": "user", "content": "Any unresolved follow-ups?"}
+{"role": "assistant", "content": "UNRESOLVED [D-06]: Q3 capacity review scheduled but date TBD. The orchestration layer routes requests through the broker and the consumer commits offsets after each batch. Backpressure is handled by the upstream queue and recovered via dead-letter retries with bounded exponential delays. "}
+{"role": "user", "content": "Summarize the agreed decisions please."}
+{"role": "assistant", "content": "AGREED items: D-01 OLTP/analytics split, D-02 retention, D-04 rollback, D-05 budget. UNRESOLVED: D-03 owner, D-06 capacity review. The orchestration layer routes requests through the broker and the consumer commits offsets after each batch. Backpressure is handled by the upstream queue and recovered via dead-letter retries with bounded exponential delays. "}
+{"role": "user", "content": "Anything else?"}
+{"role": "assistant", "content": "AGREED [D-07]: all decisions recorded in runbooks/arch/2026-05-07.md. The orchestration layer routes requests through the broker and the consumer commits offsets after each batch. Backpressure is handled by the upstream queue and recovered via dead-letter retries with bounded exponential delays. "}
+{"role": "user", "content": "Thanks."}
+{"role": "assistant", "content": "Done. The orchestration layer routes requests through the broker and the consumer commits offsets after each batch. Backpressure is handled by the upstream queue and recovered via dead-letter retries with bounded exponential delays. "}

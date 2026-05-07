@@ -1,10 +1,31 @@
 # Proxy Hook/Middleware System — Design Specification
 
-**Status:** Draft v0.1 — implementation contract.
+**Status:** Draft v0.2 — 2026-05-07 — implementation contract.
 **Audience:** anyone implementing or extending the proxy at `proxy/`.
 **Companion docs:** [`compaction-strategy.md`](compaction-strategy.md), [`proxy.md`](proxy.md), [`../SECURITY.md`](../SECURITY.md).
 
 This document is the contract that subsequent implementation tasks must conform to. Implementation must not begin until this is reviewed.
+
+### Changelog
+
+**v0.2 (2026-05-07)** — Applied 16 amendments from the v0.1 review (task #38):
+
+1. §3: documented per-phase scratch fields (toolName, toolCallId, chunk, sseFrame, etc.) and clarified they augment ctx without violating the seal.
+2. §3: clarified `ctx.tags` is a read-only Set view; mutation is via `ctx.tag()` only.
+3. §5: resolved mutation-visibility contradiction — later hooks DO observe earlier hooks' mutations within the same phase (priority order matters semantically).
+4. §5: added `request:before-rewrite: messages` to legal `replace` fields; documented engine write-back to `parsed.messages`.
+5. §5: documented `mutate` collisions (highest-priority wins, warning emitted).
+6. §5: documented `HookPhaseClosedError` for post-timeout mutation calls.
+7. §5: documented `inject` placement fallbacks for zero-system / non-user-final cases.
+8. §6: corrected handler signature to `(ctx, hookConfig) => Promise<void> | void`.
+9. §4: defined `predicate_module` resolution semantics.
+10. §6.5: added Handler resolution subsection (built-in registry + relative-path forms).
+11. §2: clarified `stream:context-trigger` condition is fixed at request time; firing happens on the first stream chunk.
+12. §12: clarified empty-registry byte-identity is conditional on no `stream:*` hooks being registered.
+13. §11: renamed variants to match `proxy/eval/ab-harness/variants.py` (`tier0+tier1`, `caveman-self-compact`).
+14. §11: clarified per-cell rows vs aggregated metric shape.
+15. §11: noted `x-rewrite-stats` must be emitted on enforce-mode upstream-bound responses (separate ticket).
+16. §3: documented JSONL snake_case vs ctx camelCase naming convention.
 
 ---
 
@@ -110,7 +131,7 @@ Fire inside the streaming loop (server.js:296–311). Latency budget applies str
 
 #### `stream:context-trigger`
 
-**When:** During the streaming loop, when running `prompt_token_fraction` (`promptTokens / nCtx`) crosses `watermarks.prompt_fraction`. Mid-stream observation only — cannot rewrite the in-flight response. The `inject()` action at this phase writes a session-hint file (`cache_dir/session-hints/<requestId>.json`) consumed on the next request via a built-in priority-1 loader at `request:before-rewrite`.
+**When:** The triggering *condition* — `prompt_token_fraction = promptTokens / nCtx` exceeding `watermarks.prompt_fraction` — is computed once at request time (no mid-stream re-tokenization per §7). The phase *fires* on the first stream chunk if and only if that pre-computed condition holds. Mid-stream observation only — cannot rewrite the in-flight response. The `inject()` action at this phase writes a session-hint file (`cache_dir/session-hints/<requestId>.json`) consumed on the next request via a built-in priority-1 loader at `request:before-rewrite`.
 
 **Adds:** `triggerRatio`, `threshold`, `sessionHintPath`.
 
@@ -139,6 +160,8 @@ Fire inside the streaming loop (server.js:296–311). Latency budget applies str
 ## 3. RequestContext Shape
 
 `RequestContext` is constructed once per request. Hooks receive it by reference. Top-level keys are sealed — hooks may not add, delete, or rename top-level keys.
+
+**Naming convention.** JSONL records use snake_case (e.g. `elided_tool_result_ids`, `hook_tags`, `total_hook_time_ms`); the in-process `RequestContext` uses camelCase (e.g. `elidedIds`, `hookTimings`, `totalHookTimeMs`). The engine translates between the two at the JSONL boundary; hook authors should never see snake_case on `ctx`.
 
 ```js
 const RequestContext = {
@@ -190,6 +213,33 @@ const RequestContext = {
   abort(statusCode: number, body: object): void,
 };
 ```
+
+### Per-phase scratch fields
+
+Beyond the sealed shape above, the engine populates phase-scoped scratch fields on `ctx` whose values are typed as `unknown | undefined` outside their owning phase. These do **not** violate the top-level seal: they are declared as part of the type, just narrowed to `undefined` outside their phase. Hooks must treat them as `undefined` when read outside the listed phase.
+
+| Field | Populated in | Notes |
+|---|---|---|
+| `toolName` | `stream:tool-call-start`, `stream:tool-call-complete` | string |
+| `toolCallId` | `stream:tool-call-start`, `stream:tool-call-complete` | string |
+| `toolCallIndex` | `stream:tool-call-start`, `stream:tool-call-complete` | number |
+| `toolArgs` | `stream:tool-call-complete` | parsed JSON, raw string fallback |
+| `toolCallComplete` | `stream:tool-call-complete` | full tool_call record |
+| `thinkingBlockIndex` | `stream:thinking-start`, `stream:thinking-end` | number |
+| `thinkingTokensEstimate` | `stream:thinking-end` | char-based estimate |
+| `triggerRatio` | `stream:context-trigger` | number |
+| `threshold` | `stream:context-trigger` | number from watermarks |
+| `sessionHintPath` | `stream:context-trigger` | filesystem path |
+| `stopReason` | `stream:stop-string` | "stop" / "length" |
+| `completionTokensEstimate` | `stream:stop-string` | nullable |
+| `chunk` | `stream:chunk` | Uint8Array |
+| `sseFrame` | `stream:delta` | raw string |
+| `delta` | `stream:delta` | parsed delta |
+| `deltaIndex` | `stream:delta` | number |
+
+### `tags` is read-only
+
+`ctx.tags` is exposed as a read-only `Set` view. Hooks add tags via `ctx.tag(name)` only — direct `ctx.tags.add()` is forbidden and the engine **freezes the Set between phases**. Attempts to mutate `ctx.tags` directly throw `TypeError`.
 
 ### Mutability matrix
 
@@ -252,6 +302,10 @@ Synchronous only. Async predicates are rejected at registration time — keeps t
 
 A registration may supply both. Declarative is evaluated first (cheaper); programmatic only if declarative passes. AND semantics.
 
+### 4.4 `predicate_module`
+
+When a hook is configured in YAML (rather than registered programmatically), `predicate_module` names a JS module path resolved relative to `proxy/src/hooks/` whose `default` export is a synchronous predicate `(ctx, hookConfig) => boolean`. It composes with `filter:` under the same AND semantics as §4.3 — declarative `filter:` first, then `predicate_module` if declarative passes. Built-in predicate modules use the `built-in:<id>` form resolved via the registry described in §6.5.
+
 ```js
 registry.on('stream:context-trigger', {
   id: 'inject-once',
@@ -266,7 +320,7 @@ registry.on('stream:context-trigger', {
 
 ## 5. Action Types
 
-Hooks signal intent via `RequestContext` methods. Mutations are applied after the hook's promise resolves; hooks within a phase see the same snapshot — they do not observe each other's mutations within the same phase. Mutations accumulate in priority order.
+Hooks signal intent via `RequestContext` methods. Mutations are applied when the calling hook's promise resolves, **before** the next hook in the same phase runs: later hooks observe earlier hooks' mutations within the same phase. Priority order therefore matters semantically — a higher-priority (lower-number) hook's writes are visible to lower-priority hooks in the same phase.
 
 Exception: `abort()` takes effect immediately when the hook returns; subsequent hooks in the same phase are skipped.
 
@@ -287,11 +341,22 @@ ctx.replace('outboundBuf', Buffer.from(JSON.stringify(newBody), 'utf8'));
 ```
 
 Legal fields per phase:
+- `request:before-rewrite`: `messages`
 - `request:after-rewrite`: `outboundMessages`
 - `request:before-upstream-send`: `outboundBuf`
 - `stream:chunk`: `chunk`
 
+When a hook calls `ctx.replace('messages', ...)` the engine writes the new value back to `parsed.messages` so downstream `rewriteRequest` (and any subsequent `request:before-rewrite` hooks per the same-phase visibility rule above) see the new value.
+
 If two hooks in the same phase replace the same field, the highest-priority (lowest number) wins; engine logs a warning.
+
+### `mutate` collisions
+
+When two hooks in the same phase mutate the same `path` (e.g. both write `outboundMessages.2.content`), the higher-priority (lower-number) hook's value wins; the engine emits a `warn`-level log identifying both hook ids and the contested path. Hooks should not rely on others' partial mutations — design for idempotence within a phase.
+
+### Phase-closed mutation calls
+
+If a hook is async and times out (§6 per-hook timeout), the engine closes the phase boundary for that hook. Any subsequent `mutate`, `replace`, `inject`, or `abort` call from the abandoned promise throws `HookPhaseClosedError`. The engine swallows this error at the boundary and logs `warn` with `{ hookId, phase, action }`. The host request continues unaffected.
 
 ### `inject`
 Splice a synthetic message into `outboundMessages`.
@@ -302,6 +367,8 @@ ctx.inject('after',  { role: 'user',   content: '(proxy note: summarize plan)' }
 ```
 
 `before` places the message immediately after the last `role:"system"` block. `after` places it immediately before the final user turn. Injected messages are tagged `{_hook_injected: true, _hook_id: hookId}`.
+
+**Placement fallbacks.** If there are zero system messages, `before` ("after the last system block") is treated as "before the first user turn". If the final turn is `tool` or `assistant` (i.e. there is no trailing user turn), `after` ("before the final user turn") falls back to "append to messages".
 
 Legal: `request:after-rewrite` (into outboundMessages), `stream:context-trigger` (into the next-request session hint file).
 
@@ -330,7 +397,7 @@ registry.on(phase, {
   id:           'string-unique-within-phase',
   filter:       { /* declarative */ } | null,
   predicate:    (ctx, config) => boolean | null,
-  handler:      async (ctx) => void,
+  handler:      (ctx, hookConfig) => Promise<void> | void,
   priority:     100,    // 0..1000; lower runs first; default 100
   timeout_ms:   50,     // per-invocation; default 50
 });
@@ -347,7 +414,7 @@ Within a phase: ascending `priority`, ties FIFO by registration order. Built-in 
 One hook throwing — sync or rejected promise — must NOT abort the request stream. The engine wraps each invocation:
 
 ```
-try { await hook.handler(ctx) } catch (err) {
+try { await hook.handler(ctx, hook.config) } catch (err) {
   logger.warn({ hookId, phase, err: err.message, requestId }, 'hook error; continuing');
   hookTimings[hookId] = timeout_ms; // charge full timeout
 }
@@ -360,6 +427,15 @@ try { await hook.handler(ctx) } catch (err) {
 `Promise.race` against `setTimeout(timeout_ms)`. On timeout: warn, charge full timeout to that hook's timing, continue. The orphaned promise is abandoned (Node has no cancellation). Hooks that spawn subprocesses must wire their own `AbortSignal`.
 
 Configurable per-hook in `config.yaml` and globally via `hooks.default_timeout_ms`.
+
+### 6.5 Handler resolution
+
+The `handler:` (and `predicate_module:`) fields in YAML accept two forms:
+
+- **Built-in.** `built-in:<id>` — the engine resolves these via a static registry shipped at `proxy/src/hooks/registry.js` mapping ids to JS module exports. Built-in hooks must be registered there at module-load time; unknown ids throw at config load.
+- **Third-party / repo-local.** `./relative/path.js#exportName` — resolved relative to `proxy/src/hooks/`. The path is dynamically `import()`ed once at config load, the named export is captured, and registration throws if the file is missing or the export is not a function.
+
+Both forms produce a function with the §6 handler signature `(ctx, hookConfig) => Promise<void> | void`. Programmatic registrations via `registry.on(...)` pass the function directly and bypass resolution.
 
 ---
 
@@ -634,14 +710,16 @@ Every new hook is benchmarked against three baselines before being enabled in `m
 | ID | Description |
 |---|---|
 | `do-nothing` | Hook absent or filter always-false. Measures dispatch overhead at zero activations. |
-| `caveman-then-llm-self-compact` | No proxy hooks; client passes the full message array; the model is asked to summarize itself in-context. The "doing nothing at the proxy layer" reference. |
-| `tier0-tier1-only` | Existing `rewrite.js` pipeline (verbatim window + tier1 elision), no extra hooks. The current quality bar. |
+| `caveman-self-compact` | No proxy hooks; client passes the full message array; the model is asked to summarize itself in-context. The "doing nothing at the proxy layer" reference. |
+| `tier0+tier1` | Existing `rewrite.js` pipeline (verbatim window + tier1 elision), no extra hooks. The current quality bar. |
+
+(Variant ids match `proxy/eval/ab-harness/variants.py` exactly — keep these in sync.)
 
 ### Per-run metrics
 
 ```json
 {
-  "baseline": "tier0-tier1-only",
+  "baseline": "tier0+tier1",
   "hook_id": "prose-summarize",
   "fixture": "needle_50turns.jsonl",
   "runs": 3,
@@ -658,10 +736,12 @@ Every new hook is benchmarked against three baselines before being enabled in `m
 }
 ```
 
+The harness emits **per-cell rows** (one per fixture × variant × seed) matching `runner.py`'s `METRIC_KEYS` — these are the raw measurements, in JSONL, one record per request. The metric shape shown above (`*_p50_ms`, `*_p99_ms`, `hook_error_rate`, etc.) is the **aggregated** report computed offline by an aggregator step that reads the per-cell rows: `latency_p50_ms = percentile(rows.latency_ms, 50)`, `hook_error_rate = mean(rows.hook_error)`, etc. Hook timing surfaces from per-record JSONL fields (`total_hook_time_ms`, `hook_timings`) rather than being computed by the harness directly.
+
 ### Quality gates
 
 - **Primary:** `needle_recall_pct ≥ 90` on the needle fixture (per `compaction-strategy.md §8.3`). Below 90 → hook ships disabled by default.
-- **Secondary:** `token_reduction_pct > 0` vs `tier0-tier1-only`, OR `latency_p50_ms < tier0-tier1-only` — must offer either tokens or latency win.
+- **Secondary:** `token_reduction_pct > 0` vs `tier0+tier1`, OR `latency_p50_ms < tier0+tier1` — must offer either tokens or latency win.
 - **Sanity:** `hook_error_rate < 0.01`, `hook_timeout_rate < 0.05`.
 
 ### Invocation contract
@@ -670,13 +750,15 @@ Every new hook is benchmarked against three baselines before being enabled in `m
 python3 proxy/eval/ab-harness/runner.py \
     --hook prose-summarize \
     --fixture proxy/eval/fixtures/needle_50turns.jsonl \
-    --baselines do-nothing,tier0-tier1-only \
+    --baselines do-nothing,tier0+tier1 \
     --proxy http://localhost:11500 \
     --runs 3 \
     --output proxy/eval/ab-harness/results/
 ```
 
 Harness must run without a live model (regex-based needle grading per `proxy/eval/needle.py`). Token counts come from `x-rewrite-stats` header.
+
+> **Note (separate ticket):** for the harness to read `x-rewrite-stats` reliably, the proxy must emit this header on **enforce-mode upstream-bound responses** (today it is only emitted in debug-rewrite paths). Tracked as a separate `proxy/src/server.js` change ticket — out of scope for this spec but a precondition for §11 to function end-to-end.
 
 ### Required reporting
 
@@ -699,6 +781,8 @@ if (registry.hasHooksFor(phase)) {
 ```
 
 `hasHooksFor` is O(1). When false: no `Promise.race`, no `setTimeout`, no `RequestContext` allocation overhead beyond what already exists. `proxy/tests/passthrough.test.js` must continue to pass without modification.
+
+**Byte-identity caveat.** Empty-registry byte-identity holds **only when no `stream:*` hooks are registered**. Registering any stream hook (even one with a filter that never matches) activates a new SSE parser layer that reads chunks to dispatch `stream:delta` / `stream:tool-call-*` / etc. Passthrough remains *semantically* identical — bytes go out unchanged unless a hook calls `replace('chunk', ...)` — but the egress is no longer byte-identical to today's raw forwarder (chunk boundaries may coalesce differently). Tests asserting byte-identity must skip when stream hooks are registered.
 
 ### Gradual re-expression of tier0/1 as built-in hooks
 
@@ -733,7 +817,7 @@ watermarks:
 |---|---|---|---|---|---|---|
 | *(pending)* | | | | | | |
 
-The writeup must include cases where each strategy wins (not all hooks win against `caveman-then-llm-self-compact`; not all hooks beat `tier0-tier1-only`). Bias-free reporting is part of the contract.
+The writeup must include cases where each strategy wins (not all hooks win against `caveman-then-llm-self-compact`; not all hooks beat `tier0+tier1`). Bias-free reporting is part of the contract.
 
 ---
 

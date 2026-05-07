@@ -1,0 +1,59 @@
+{
+  "people": [
+    {
+      "name": "Nora",
+      "role": "Backend Engineer",
+      "company": "Notice"
+    }
+  ],
+  "systems": [
+    {
+      "name": "Postgres 16",
+      "type": "Database",
+      "status": "Current"
+    },
+    {
+      "name": "MySQL 5.7",
+      "type": "Database",
+      "status": "Legacy"
+    },
+    {
+      "name": "pg_partman 5.x",
+      "type": "Partitioning Tool",
+      "configuration": "retention=90 days"
+    },
+    {
+      "name": "auditarchiver",
+      "type": "Go Service",
+      "deployment": "GKE",
+      "function": "Export audit logs to S3 in Parquet format using Apache Arrow"
+    },
+    {
+      "name": "S3",
+      "type": "Object Storage",
+      "purpose": "Archive storage"
+    }
+  ],
+  "decisions": [
+    {
+      "topic": "Data Retention",
+      "detail": "Keep last 90 days of audit_log data in hot storage; archive older data to S3 in Parquet format"
+    },
+    {
+      "topic": "Partitioning Strategy",
+      "detail": "Partition audit_log table by created_at month"
+    },
+    {
+      "topic": "Migration Path",
+      "detail": "Migrating from legacy MySQL 5.7 schema to Postgres 16"
+    }
+  ],
+  "blockers": [
+    {
+      "issue": "Goroutine Leak",
+      "details": "auditarchiver leaks goroutines under load (40k goroutines after 6 hours)",
+      "suspected_cause": "Missing context cancellation in the parquet writer",
+      "evidence": "Pprof analysis"
+    }
+  ]
+}

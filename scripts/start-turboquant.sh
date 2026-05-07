@@ -61,7 +61,7 @@ if (( DRY_RUN )); then
     -ctk "$KV" -ctv "$KV" \
     "${COMMON[@]}" \
     "${SAMPLING[@]}" \
-    "${ROPE_FLAGS[@]}" \
+    ${ROPE_FLAGS[@]+"${ROPE_FLAGS[@]}"} \
     --alias qwen3.6-turboquant
   printf " 2>&1 | tee %q\n" "$LOG"
   exit 0

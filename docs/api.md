@@ -87,3 +87,20 @@ vendor/llama.cpp-mainline/build/bin/llama-server \
 ```
 
 Then route `/v1/embeddings` traffic to `:10510` and chat to `:10501`.
+
+### Use the bundled launcher
+
+`scripts/start-embed.sh` (alias `make start-embed`) wraps the above with the
+project's port-guard / model-resolve helpers. It defaults to port `10510`,
+`-c 8192`, f16 KV, and looks for `./models/embed.gguf`. Drop in any embedding
+GGUF (e.g. `nomic-embed-text-v1.5.Q8_0.gguf` from
+`huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF`) and either symlink it as
+`models/embed.gguf` or pass the path:
+
+```bash
+MODEL=/abs/path/to/nomic-embed-text-v1.5.Q8_0.gguf ./scripts/start-embed.sh
+# then:
+curl -s http://127.0.0.1:10510/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{"model":"embed","input":"hello world"}' | jq '.data[0].embedding | length'
+```

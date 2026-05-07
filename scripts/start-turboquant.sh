@@ -74,6 +74,6 @@ TURBO_LAYER_ADAPTIVE=1 exec "$BIN" \
   -ctk "$KV" -ctv "$KV" \
   "${COMMON[@]}" \
   "${SAMPLING[@]}" \
-  "${ROPE_FLAGS[@]}" \
+  ${ROPE_FLAGS[@]+"${ROPE_FLAGS[@]}"} \
   --alias qwen3.6-turboquant \
   2>&1 | tee "$LOG"

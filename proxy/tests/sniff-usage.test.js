@@ -27,6 +27,32 @@ test("sniffUsage: streaming final-chunk shape with timings sibling", () => {
   assert.equal(r.prompt_tokens, 263);
 });
 
+test("sniffUsage: realistic multi-chunk SSE stream with trailing usage frame", () => {
+  // Regression for fix b9bb6f1: sniffUsage must walk past 7 content-only delta
+  // chunks (each carrying its own `{...}` braces) and locate the usage object
+  // in the final non-DONE frame. The pre-fix flat-regex implementation would
+  // either match an earlier `{}`-balanced chunk OR truncate at the first inner
+  // `}` inside `prompt_tokens_details`, returning null for completion_tokens.
+  const chunks = [
+    `data: {"id":"c1","choices":[{"index":0,"delta":{"role":"assistant","content":""}}]}`,
+    `data: {"id":"c1","choices":[{"index":0,"delta":{"content":"Hello"}}]}`,
+    `data: {"id":"c1","choices":[{"index":0,"delta":{"content":" there"}}]}`,
+    `data: {"id":"c1","choices":[{"index":0,"delta":{"content":", how"}}]}`,
+    `data: {"id":"c1","choices":[{"index":0,"delta":{"content":" are you"}}]}`,
+    `data: {"id":"c1","choices":[{"index":0,"delta":{"content":" today?"}}]}`,
+    `data: {"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
+    `data: {"choices":[],"usage":{"completion_tokens":42,"prompt_tokens":1337,"total_tokens":1379,"prompt_tokens_details":{"cached_tokens":128}},"timings":{"prompt_n":1337,"prompt_ms":250.5,"predicted_n":42}}`,
+    `data: [DONE]`,
+  ];
+  const stream = chunks.map((c) => c + "\n\n").join("");
+  const r = sniffUsage(stream);
+  assert.notEqual(r, null, "usage must be parsed from final frame");
+  assert.equal(r.completion_tokens, 42);
+  assert.equal(r.prompt_tokens, 1337);
+  assert.equal(r.total_tokens, 1379);
+  assert.deepEqual(r.prompt_tokens_details, { cached_tokens: 128 });
+});
+
 test("sniffUsage: returns null when no usage present", () => {
   assert.equal(sniffUsage('{"choices":[]}'), null);
   assert.equal(sniffUsage(""), null);

@@ -359,3 +359,162 @@ test("phantom expand_tool_result: proxy answers locally without upstream", async
   assert.ok(toolMsg, "expected proxy-synthesized tool reply");
   assert.match(toolMsg.content, /VERBATIM-CONTENT-/);
 });
+
+test("phantom expand_tool_result: bash-read-shaped payload rehydrates byte-exact", async (t) => {
+  // Edge case: a realistic Bash/Read tool result (multi-line, with quotes,
+  // braces and angle-brackets that would otherwise confuse the stub format).
+  // Verifies the rehydrated content matches the original byte-for-byte and
+  // that elision happens past the watermark (tool_result_min_tokens=2000).
+  const cacheDir = mkdtempSync(resolve(tmpdir(), "qwen-compact-test-"));
+  let forwardedBody;
+  const { server: stub, port: upstreamPort } = await startStubUpstream({
+    onChat: (parsed) => (forwardedBody = parsed),
+  });
+  const { server: proxy, jsonl, port: proxyPort } = await startProxy({
+    upstreamPort,
+    cacheDir,
+    mode: "enforce",
+  });
+  t.after(
+    () =>
+      new Promise((r) => {
+        proxy.close(() => stub.close(() => r()));
+        jsonl.closeAll();
+      }),
+  );
+
+  // Build a long, realistic-ish bash output that includes characters the
+  // stub would otherwise need to escape: quotes, `<`, `>`, `&`, newlines,
+  // and JSON-looking braces. ~16K chars → ~4K tokens (above 2000 watermark).
+  const tricky = [
+    `$ cat /etc/hosts`,
+    `127.0.0.1 localhost`,
+    `::1 localhost`,
+    `# comment with "quotes" & <html> tags`,
+    `{ "json": "looking", "value": [1,2,3] }`,
+    `</tool_result>  -- adversarial close tag`,
+  ].join("\n");
+  const big = (tricky + "\n").repeat(400); // > min_tokens
+  assert.ok(big.length > 8000);
+
+  // Step 1: send the big tool result through enforce mode → proxy elides &
+  // persists call_bash.json under cache_dir/tool-results/.
+  const initialMessages = [
+    { role: "system", content: "sys" },
+    {
+      role: "assistant",
+      content: null,
+      tool_calls: [
+        {
+          id: "call_bash",
+          type: "function",
+          function: { name: "Bash", arguments: '{"cmd":"cat /etc/hosts"}' },
+        },
+      ],
+    },
+    { role: "tool", tool_call_id: "call_bash", name: "Bash", content: big },
+    { role: "assistant", content: "ack" },
+    { role: "user", content: "next" },
+  ];
+  await fetch(`http://127.0.0.1:${proxyPort}/v1/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model: "stub", messages: initialMessages }),
+  });
+
+  // Confirm elision actually happened on the wire.
+  const elidedToolMsg = forwardedBody.messages.find(
+    (m) => m.role === "tool" && m.tool_call_id === "call_bash",
+  );
+  assert.ok(elidedToolMsg, "tool message present");
+  assert.match(elidedToolMsg.content, /^<tool_result id="call_bash"/);
+  assert.notEqual(elidedToolMsg.content, big, "content was elided");
+
+  // Step 2: model "calls" expand_tool_result. Proxy answers locally.
+  const followup = [
+    { role: "system", content: "sys" },
+    { role: "user", content: "show me hosts file" },
+    {
+      role: "assistant",
+      content: null,
+      tool_calls: [
+        {
+          id: "expand_call_bash",
+          type: "function",
+          function: {
+            name: "expand_tool_result",
+            arguments: JSON.stringify({ id: "call_bash" }),
+          },
+        },
+      ],
+    },
+  ];
+  await fetch(`http://127.0.0.1:${proxyPort}/v1/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model: "stub", messages: followup }),
+  });
+
+  const rehydrated = forwardedBody.messages.find(
+    (m) => m.role === "tool" && m.tool_call_id === "expand_call_bash",
+  );
+  assert.ok(rehydrated, "expected proxy-synthesized expand reply");
+  // Byte-exact rehydration of the full original payload.
+  assert.equal(rehydrated.content, big, "rehydrated content matches original byte-for-byte");
+});
+
+test("phantom expand_tool_result: unknown id returns local error envelope, not upstream", async (t) => {
+  // Edge case: the model hallucinates an id that was never persisted. The
+  // proxy must answer locally with an error envelope so the request still
+  // resolves; it must NOT forward the unanswered tool_call to upstream
+  // (which would otherwise reject the prompt for a missing tool reply).
+  const cacheDir = mkdtempSync(resolve(tmpdir(), "qwen-compact-test-"));
+  let forwardedBody;
+  const { server: stub, port: upstreamPort } = await startStubUpstream({
+    onChat: (parsed) => (forwardedBody = parsed),
+  });
+  const { server: proxy, jsonl, port: proxyPort } = await startProxy({
+    upstreamPort,
+    cacheDir,
+    mode: "enforce",
+  });
+  t.after(
+    () =>
+      new Promise((r) => {
+        proxy.close(() => stub.close(() => r()));
+        jsonl.closeAll();
+      }),
+  );
+
+  const followup = [
+    { role: "system", content: "sys" },
+    { role: "user", content: "fetch something" },
+    {
+      role: "assistant",
+      content: null,
+      tool_calls: [
+        {
+          id: "expand_ghost",
+          type: "function",
+          function: {
+            name: "expand_tool_result",
+            arguments: JSON.stringify({ id: "never_persisted_id" }),
+          },
+        },
+      ],
+    },
+  ];
+  await fetch(`http://127.0.0.1:${proxyPort}/v1/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model: "stub", messages: followup }),
+  });
+
+  const synth = forwardedBody.messages.find(
+    (m) => m.role === "tool" && m.tool_call_id === "expand_ghost",
+  );
+  assert.ok(synth, "proxy must synthesize a tool reply even on unknown id");
+  const parsed = JSON.parse(synth.content);
+  assert.match(parsed.error, /unknown id/);
+  assert.match(parsed.error, /never_persisted_id/);
+});

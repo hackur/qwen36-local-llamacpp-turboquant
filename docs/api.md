@@ -13,7 +13,7 @@ Tested against `vendor/llama-cpp-turboquant/build/bin/llama-server` on `127.0.0.
 | `/v1/chat/completions` | POST | 400 → 200 with body | Standard OpenAI chat. Streaming via `stream:true`. |
 | `/v1/completions` | POST | 400 → 200 with body | Legacy OpenAI completion endpoint |
 | `/completion` | POST | 400 → 200 | llama.cpp-native completion endpoint |
-| `/metrics` | GET | 501 | Disabled by default. Add `--metrics` to llama-server to enable Prometheus. |
+| `/metrics` | GET | 501 → 200 | Opt-in via `METRICS=1` on `start-turboquant.sh` (adds `--metrics`); off by default. |
 | `/v1/embeddings` | POST | 501 | Model isn't an embedding model. Load a separate embedder if you need this. |
 | `/infill` | POST | 500 | Model isn't a fill-in-the-middle model |
 

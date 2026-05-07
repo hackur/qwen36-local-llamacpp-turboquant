@@ -64,6 +64,22 @@ recommendedMaxWorkingSetSize  = 55662.79 MB
 
 Running two llama-servers simultaneously on this Mac OOMs the GPU (each tries to claim 28 GB of weights). The plan has been to A/B them by swapping, not running concurrently.
 
+## 2026-05-07 — qwen36-neo turbo3 @131K, sustained 3-run bench (thermal throttling reproduced)
+
+3× back-to-back 500-token gens of the transformer-attention prompt against the live launchd-managed primary on `:10501` (M3 Max 64 GiB, AC, no other heavy processes). Confirms HANDOFF Round 5's reported variance band (4.75–14.49 tok/s) and supports `#49` hypothesis #2 (thermal throttling under sustained 500-tok generations). Wired memory was at 25.6 GiB (KV cache pinned), free 0.1 GiB, swap 13/13.3 GiB.
+
+| Run | Gen tok/s | Prompt tok/s | Wall (s) | Δ vs run 1 |
+|----:|----------:|-------------:|---------:|-----------:|
+| 1 | 13.92 | 91.5 | 36.5 | — |
+| 2 | 7.69 | 66.7 | 65.8 | -45 % |
+| 3 | 4.11 | 41.2 | 122.8 | -70 % |
+
+Linear-ish decay run-over-run is the classic Apple-Silicon GPU-throttle signature. Pre/post snapshots at `logs/variance-20260507-160120-pre-bench.log` and `logs/variance-20260507-160509-post-bench.log` (one-shot `pmset -g therm` did not record a warning level, but `pmset` is known to under-surface; the speed decay is the reliable signal).
+
+Quality at the same `:10501` was perfect over 5 fixed prompts (`benchmarks/quality-20260507-155948/`) — the model isn't hallucinating from heat, it's just slower. Recommendation: cool the chassis 5–10 minutes between sustained 3-run benches; for repeatable numbers, pin to AC + wait for thermal floor.
+
+Baseline `:10500` was not running this round (one-server-at-a-time policy after a smell event); A/B diff against baseline f16 deferred to a future cool-chassis session.
+
 ## Reproduce
 
 ```bash

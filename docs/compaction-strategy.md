@@ -396,10 +396,16 @@ idle, session keying. Measure prefill latency before/after.
 
 **Phase 4 — structured notes + tool pruning (optional).** Phantom
 `note_write`/`note_read`. Tool pruning with `always_keep` list. Skip if Phase
-1–3 already deliver enough headroom.
+1–3 already deliver enough headroom. **Status: implemented (off by default).**
+Heuristic Tier-2/3 extraction lives in `proxy/src/notes.js`; gated behind
+`notes.enabled` in `config.yaml`. Replaces oversized tool-result bodies with a
+`<tool_result_notes>` envelope when entities/kv/decision markers are found.
 
 **Phase 5 — sumy fallback (optional).** Wire the original spike's sumy script
-as the Tier-3 fallback when the summarizer is offline.
+as the Tier-3 fallback when the summarizer is offline. **Status: implemented
+(off by default).** Implemented in JS in `proxy/src/notes.js` — no Python sumy
+package, no new npm deps. Gated behind `sumy.enabled`. Fires only when notes
+extraction yields nothing on an oversized body.
 
 ---
 

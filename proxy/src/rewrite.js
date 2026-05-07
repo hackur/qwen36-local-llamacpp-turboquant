@@ -17,6 +17,7 @@ import {
 } from "./tier1.js";
 import { shouldCompact } from "./watermark.js";
 import { summarize, buildToolResultPrompt } from "./summarizer.js";
+import { extractNotesFromToolResult, formatNotes, sumyExtractive } from "./notes.js";
 
 function messageBodyText(m) {
   if (!m) return "";
@@ -190,6 +191,93 @@ export async function rewriteRequest({
     }
   }
 
+  // Phase 4/5 hook: structured notes (Tier-2/3) + sumy extractive fallback
+  // (Tier-4). Both gated, both off by default. We only act on tool-result
+  // bodies that:
+  //   - exceed Tier-1 minTokens (so they'd otherwise be stubbed), AND
+  //   - were NOT already replaced by the Phase 2 summarizer (we recognise
+  //     that by the `<tool_result_summary` envelope), AND
+  //   - the watermark has tripped (same gate Phase 2 uses).
+  // On a hit we replace the body with a `<tool_result_notes>` (or sumy
+  // `<tool_result_summary>`) envelope, in the same shape Tier 1 treats as
+  // already-short, so Tier 1 will not re-stub it.
+  const notesCfg = config.notes || {};
+  const sumyCfg = config.sumy || {};
+  let notesCount = 0;
+  let sumyUsed = 0;
+  const notesEnabled = notesCfg.enabled === true;
+  const sumyEnabled = sumyCfg.enabled === true;
+  if (notesEnabled || sumyEnabled) {
+    const decision = shouldCompact(messages, {
+      nCtx: nCtx || 0,
+      currentTokens: origTokens,
+      watermarkRatio: wm.prompt_fraction,
+      maxMessages: wm.max_messages,
+      maxAge: wm.max_age_turns,
+    });
+    if (decision.compact) {
+      const notesMin = notesCfg.min_tokens_to_extract ?? minTokens;
+      const sumyTarget = sumyCfg.target_sentences ?? 5;
+      const alreadyCompressed = (s) =>
+        typeof s === "string" &&
+        (/^<tool_result_summary\b/.test(s) || /^<tool_result_notes\b/.test(s));
+      // Make sure we have a writable clone (Phase 2 may or may not have made one).
+      if (workingMessages === messages) {
+        workingMessages = messages.map((m) =>
+          m && Array.isArray(m.content)
+            ? { ...m, content: m.content.map((p) => ({ ...p })) }
+            : { ...m },
+        );
+      }
+      const tryReplace = (bodyText, tool) => {
+        if (notesEnabled && syncTokenCount(bodyText) >= notesMin) {
+          const recs = extractNotesFromToolResult(bodyText);
+          if (recs.length > 0) {
+            notesCount++;
+            return formatNotes(recs, { tool });
+          }
+        }
+        if (sumyEnabled) {
+          const summary = sumyExtractive(bodyText, { targetSentences: sumyTarget });
+          if (summary) {
+            sumyUsed++;
+            return `<tool_result_summary tool="${tool}" source="sumy">${summary}</tool_result_summary>`;
+          }
+        }
+        return null;
+      };
+      for (const i of evictableIndices) {
+        const m = workingMessages[i];
+        if (!m) continue;
+        if (m.role === "tool") {
+          const bodyText = messageBodyText(m);
+          if (!bodyText || alreadyCompressed(bodyText)) continue;
+          if (syncTokenCount(bodyText) < minTokens) continue;
+          const tool =
+            m.name || toolNameFromCallId.get(m.tool_call_id) || "unknown";
+          const replacement = tryReplace(bodyText, tool);
+          if (replacement) workingMessages[i] = { ...m, content: replacement };
+        } else if (Array.isArray(m.content)) {
+          for (let p = 0; p < m.content.length; p++) {
+            const part = m.content[p];
+            if (!part || part.type !== "tool_result") continue;
+            const bodyText =
+              typeof part.content === "string"
+                ? part.content
+                : messageBodyText({ content: part.content });
+            if (!bodyText || alreadyCompressed(bodyText)) continue;
+            if (syncTokenCount(bodyText) < minTokens) continue;
+            const callId = part.tool_use_id || part.tool_call_id;
+            const tool =
+              toolNameFromCallId.get(callId) || part.name || "unknown";
+            const replacement = tryReplace(bodyText, tool);
+            if (replacement) m.content[p] = { ...part, content: replacement };
+          }
+        }
+      }
+    }
+  }
+
   const { rewrittenMessages, elidedIds } = applyTier1({
     messages: workingMessages,
     evictableIndices,
@@ -229,6 +317,8 @@ export async function rewriteRequest({
       rewritten_tokens: rewrittenTokens,
       elided_tool_result_ids: elidedIds,
       summarized_count: summarizedCount,
+      notes_count: notesCount,
+      sumy_used: sumyUsed,
     },
   };
 }

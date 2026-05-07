@@ -57,3 +57,30 @@ summarizer:
   request_timeout_ms: 8000
   max_tokens: 512
   model: "qwen-compact-summarizer"
+
+# Phase 3 — KV stable-prefix discipline + session keying.
+# When `enabled: false` (default) the proxy is byte-identical to Phase 0/1/2.
+# When enabled, a stable session key is derived per request and attached to
+# the JSONL log. `slot_endpoint_base` is reserved for the future wire-up to
+# llama.cpp `/slots/<id>/save` and `/slots/<id>/restore`; empty string keeps
+# slot integration stubbed.
+session:
+  enabled: false
+  ttl_seconds: 3600
+  slot_endpoint_base: ""
+  key_header: "x-session-id"
+
+# Phase 4 — structured notes (Tier-2/3). Off by default. Heuristic entity /
+# key=value / decision-marker extraction on oversized tool-result bodies the
+# Phase 2 summarizer didn't compress. Replaces the body with a
+# `<tool_result_notes>` envelope so Tier 1 won't re-stub it.
+notes:
+  enabled: false
+  min_tokens_to_extract: 200
+
+# Phase 5 — sumy fallback (Tier-4). Off by default. Inline extractive summary
+# (no external dep) for oversized tool-result bodies that have neither been
+# summarized (Phase 2) nor yielded any notes.
+sumy:
+  enabled: false
+  target_sentences: 5

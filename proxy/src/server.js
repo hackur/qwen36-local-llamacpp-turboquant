@@ -20,6 +20,11 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { rewriteRequest, answerExpandCalls } from "./rewrite.js";
+import {
+  keyForRequest,
+  extractStablePrefix,
+  createSessionStore,
+} from "./session.js";
 
 // Inline-header budget for x-rewritten-messages. Header size is the
 // load-bearing constraint here; HTTP servers commonly accept ~8KB per header
@@ -114,6 +119,15 @@ export function createProxyServer({
 }) {
   const upstreamUrl = config.upstream.base_url.replace(/\/+$/, "");
 
+  // Phase 3 — session store. Always constructed so logging/tests can introspect
+  // it, but only consulted when `config.session.enabled` is true. Stubs do no
+  // I/O when `slot_endpoint_base` is empty.
+  const sessionCfg = config.session || {};
+  const sessionStore = createSessionStore({
+    ttlSeconds: sessionCfg.ttl_seconds || 3600,
+    logger,
+  });
+
   async function handleChat(req, res, requestId) {
     const start = Date.now();
     const body = await readBody(req);
@@ -135,6 +149,38 @@ export function createProxyServer({
     const messageCount = Array.isArray(parsed?.messages)
       ? parsed.messages.length
       : null;
+
+    // Phase 3 instrumentation. No-op for downstream behavior; sessionKey and
+    // prefix stats end up on the JSONL record only when `session.enabled`.
+    let sessionKey = null;
+    let stablePrefixStats = null;
+    let slotLoaded = null;
+    if (sessionCfg.enabled && parsed) {
+      try {
+        sessionKey = keyForRequest(req, parsed, {
+          keyHeader: sessionCfg.key_header || "x-session-id",
+        });
+        if (Array.isArray(parsed.messages)) {
+          const sp = extractStablePrefix(parsed.messages);
+          stablePrefixStats = {
+            prefix_messages: sp.prefix.length,
+            prefix_hash: sp.prefixHash,
+            prefix_tokens: sp.prefixTokens,
+          };
+        }
+        sessionStore.touch(sessionKey, {
+          prefixHash: stablePrefixStats?.prefix_hash || null,
+        });
+        if (sessionCfg.slot_endpoint_base) {
+          slotLoaded = await sessionStore.loadSlot(sessionKey);
+        }
+      } catch (err) {
+        logger.warn(
+          { err: err.message, requestId },
+          "session keying failed; continuing without it",
+        );
+      }
+    }
 
     let promptTokens = null;
     if (parsed?.messages) {
@@ -341,6 +387,13 @@ export function createProxyServer({
           }
         : null,
       phantom_answered: phantomAnswered,
+      session: sessionCfg.enabled
+        ? {
+            key: sessionKey,
+            stable_prefix: stablePrefixStats,
+            slot_loaded: slotLoaded,
+          }
+        : null,
     };
     jsonl.write(record);
     logger.debug(record, "request complete");

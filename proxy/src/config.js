@@ -37,6 +37,33 @@ const DEFAULTS = {
     max_tokens: 512,
     model: "qwen-compact-summarizer",
   },
+  // Phase 3 — KV stable-prefix discipline + session keying. Off by default;
+  // when off, the request path is byte-identical to Phase 0/1/2.
+  // `slot_endpoint_base` is reserved for a future commit that calls llama.cpp
+  // `/slots/<id>/save` and `/slots/<id>/restore`. Empty string = stubbed.
+  session: {
+    enabled: false,
+    ttl_seconds: 3600,
+    slot_endpoint_base: "",
+    key_header: "x-session-id",
+  },
+  // Phase 4 structured notes (Tier-2/3). Off by default. When enabled, the
+  // proxy attempts heuristic entity/kv/decision extraction on oversized
+  // tool-result bodies that the Phase 2 summarizer didn't compress, and
+  // replaces the body with a `<tool_result_notes>` envelope before Tier 1
+  // would otherwise stub it.
+  notes: {
+    enabled: false,
+    min_tokens_to_extract: 200,
+  },
+  // Phase 5 sumy fallback (Tier-4). Off by default. When enabled, an inline
+  // extractive summary kicks in for oversized tool-result bodies that have
+  // neither been summarized (Phase 2) nor yielded any structured notes.
+  // No external sumy package — implemented in JS in proxy/src/notes.js.
+  sumy: {
+    enabled: false,
+    target_sentences: 5,
+  },
 };
 
 const VALID_MODES = new Set(["passthrough", "shadow", "enforce"]);

@@ -22,7 +22,13 @@ output.
 Phase 0 (instrumentation), Phase 1 (Tier-1 tool-result elision +
 `expand_tool_result` phantom tool), and Phase 2 (small-model recursive
 summarization, off by default — set `summarizer.url`) are implemented. Phase 3
-(KV stable-prefix cooperation) is still stubbed in config but not implemented.
+(KV stable-prefix cooperation) is **instrumented** (slot save/restore endpoints
+stubbed; session keying live behind `session.enabled`). Phase 4 (Tier-2/3
+structured notes — heuristic entity/kv/decision extraction) and Phase 5
+(Tier-4 sumy-style extractive fallback, implemented in JS) are implemented and
+**off by default** — flip `notes.enabled` and/or `sumy.enabled` in
+`config.yaml` to opt in. Both run between Phase 2 and Tier 1 and only fire
+when the watermark trips.
 
 ## When to use it
 

@@ -4,6 +4,7 @@ SHELL := bash
 
 .PHONY: help build start start-baseline start-tiny start-nemotron start-crow \
         start-gemma4-e4b start-qwen35-9b start-gpt-oss start-gemma4-26b start-qwen36-27b start-qwen36-neo \
+        start-embed \
         stop status info info-watch bench needle demo open preflight check \
         install-launchd uninstall-launchd clean audit-offline models \
         proxy-install proxy-test proxy-start proxy-smoke \
@@ -72,6 +73,10 @@ start-qwen36-27b: ## Start Qwen 3.6 27B IQ2_XXS (~9 GB dense)
 start-qwen36-neo: ## Start Qwen 3.6 27B NEO-CODE Heretic Q5_K_M (~19.5 GB dense, current DEFAULT)
 	@mkdir -p logs
 	MODEL=qwen36-neo ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
+
+start-embed: ## Start embeddings companion server (port 10510). Needs ./models/embed.gguf or MODEL=/path
+	@mkdir -p logs
+	./scripts/start-embed.sh > logs/embed.log 2>&1 &
 
 stop: ## Stop all llama-server processes from this repo
 	./scripts/stop-all.sh
@@ -160,6 +165,9 @@ proxy-smoke: ## Best-effort end-to-end smoke: llama-server + proxy + needle + cu
 	echo "▶ tail of today's JSONL log:"; \
 	logf="$$HOME/.cache/qwen-compact/logs/$$(date +%Y-%m-%d).jsonl"; \
 	if [[ -f "$$logf" ]]; then tail -1 "$$logf"; else echo "(no log file yet at $$logf)"; fi
+
+analyze-watermarks: ## Analyze Phase 0 proxy telemetry to recommend a compaction watermark
+	@python3 ./scripts/analyze-watermarks.py $(ARGS)
 
 privacy-scan: ## Grep tree for personal paths, names, and credential-shaped strings
 	./scripts/privacy-scan.sh

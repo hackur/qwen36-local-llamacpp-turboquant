@@ -117,3 +117,19 @@ launchctl load ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
 ```
 
 After this, `http://127.0.0.1:10501` is always live, with or without Wi-Fi.
+
+### Quarterly re-validation
+
+LM Studio updates can move model paths and quietly reintroduce online deps. `scripts/quarterly-audit.sh` audits all of it in one shot — `make audit-offline` against the live :10501 (and :11500 proxy if running), every `models/` symlink resolved, plus a fresh `scripts/privacy-scan.sh`. Reports land in `logs/quarterly-audit-YYYY-MM-DD.log`; non-zero exit on any failure.
+
+Run on demand any time:
+
+```bash
+make quarterly-audit
+```
+
+Or schedule it for the 1st of Jan/Apr/Jul/Oct via launchd:
+
+```bash
+sed "s|__REPO__|$(pwd)|g" configs/launchd-quarterly.template > ~/Library/LaunchAgents/com.local.qwen3-6.quarterly-audit.plist && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.local.qwen3-6.quarterly-audit.plist
+```

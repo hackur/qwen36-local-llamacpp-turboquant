@@ -8,7 +8,7 @@ SHELL := bash
         stop status info info-watch bench needle demo open preflight check \
         install-launchd uninstall-launchd clean audit-offline models \
         proxy-install proxy-test proxy-start proxy-smoke \
-        privacy-scan prepush
+        privacy-scan prepush quarterly-audit
 
 help:
 	@awk 'BEGIN{FS=":.*##"; printf "Targets:\n"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -174,6 +174,9 @@ privacy-scan: ## Grep tree for personal paths, names, and credential-shaped stri
 
 prepush: ## Pre-push gate — must be green before any public push
 	@$(MAKE) privacy-scan
+
+quarterly-audit: ## Run the quarterly offline re-validation (sockets + symlinks + privacy)
+	./scripts/quarterly-audit.sh
 
 audit-offline: ## Confirm llama-server has zero non-localhost sockets
 	@PID=$$(pgrep -f vendor/llama-cpp-turboquant.*llama-server | head -1); \

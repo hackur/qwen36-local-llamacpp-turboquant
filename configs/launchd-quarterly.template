@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>           <string>com.local.qwen3-6.quarterly-audit</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__REPO__/scripts/quarterly-audit.sh</string>
+  </array>
+  <!-- Quarterly: 09:00 local on the 1st of Jan, Apr, Jul, Oct. -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Month</key><integer>1</integer><key>Day</key><integer>1</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Month</key><integer>4</integer><key>Day</key><integer>1</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Month</key><integer>7</integer><key>Day</key><integer>1</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Month</key><integer>10</integer><key>Day</key><integer>1</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
+  <!-- If the machine was asleep at the scheduled time, run on next wake. -->
+  <key>RunAtLoad</key>       <false/>
+  <key>StandardOutPath</key> <string>__REPO__/logs/launchd-quarterly.out</string>
+  <key>StandardErrorPath</key><string>__REPO__/logs/launchd-quarterly.err</string>
+  <key>WorkingDirectory</key><string>__REPO__</string>
+</dict>
+</plist>
+
+<!--
+Placeholders:
+  __REPO__   absolute path to this repository checkout (e.g. /Users/<USER>/code/qwen36-local-llamacpp-turboquant)
+  <USER>     your macOS short username — only relevant inside __REPO__ if it lives under /Users/<USER>/
+
+Install (modern launchctl, macOS 11+):
+  sed "s|__REPO__|$(pwd)|g" configs/launchd-quarterly.template \
+    > ~/Library/LaunchAgents/com.local.qwen3-6.quarterly-audit.plist
+  launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.local.qwen3-6.quarterly-audit.plist
+
+  # Or, the old-school equivalent:
+  # launchctl load  ~/Library/LaunchAgents/com.local.qwen3-6.quarterly-audit.plist
+
+Verify it's scheduled:
+  launchctl print gui/$(id -u)/com.local.qwen3-6.quarterly-audit
+
+Run it once on demand (without waiting for the next quarter):
+  launchctl kickstart -k gui/$(id -u)/com.local.qwen3-6.quarterly-audit
+  # or just:  make quarterly-audit
+
+Uninstall:
+  launchctl bootout  gui/$(id -u)/com.local.qwen3-6.quarterly-audit
+  rm ~/Library/LaunchAgents/com.local.qwen3-6.quarterly-audit.plist
+
+Alternative: replace StartCalendarInterval with a 90-day timer:
+  <key>StartInterval</key><integer>7776000</integer>
+  (simpler, but drifts vs. calendar quarters and skips while machine is off.)
+-->

@@ -15,6 +15,8 @@ import {
   buildToolNameIndex,
   EXPAND_TOOL_DEFINITION,
 } from "./tier1.js";
+import { shouldCompact } from "./watermark.js";
+import { summarize, buildToolResultPrompt } from "./summarizer.js";
 
 function messageBodyText(m) {
   if (!m) return "";
@@ -37,6 +39,9 @@ export async function rewriteRequest({
   tokenizer,
   config,
   cacheDir,
+  nCtx,
+  logger,
+  summarizeFn,
 }) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   const wm = config.watermarks || {};
@@ -96,8 +101,97 @@ export async function rewriteRequest({
   const toolNameFromCallId = buildToolNameIndex(messages);
 
   const minTokens = wm.tool_result_min_tokens ?? 2000;
+
+  // Phase 2 hook: small-model recursive summarizer (Tier 3).
+  //
+  // Gate: only fire when the watermark trips AND the summarizer is configured
+  // with a non-empty URL AND its mode is shadow|enforce. For each candidate
+  // tool-result body that exceeds Tier-1 minTokens, attempt a summary; on
+  // success in `enforce`, replace the body inline so Tier 1 sees a short
+  // already-compressed payload and skips stubbing it. On any failure
+  // (offline, timeout, invalid JSON, non-2xx) we fall through unchanged.
+  let workingMessages = messages;
+  const summarizerCfg = config.summarizer || {};
+  const summarizerEnabled =
+    summarizerCfg.url &&
+    (summarizerCfg.mode === "shadow" || summarizerCfg.mode === "enforce");
+  let summarizedCount = 0;
+  if (summarizerEnabled) {
+    const decision = shouldCompact(messages, {
+      nCtx: nCtx || 0,
+      currentTokens: origTokens,
+      watermarkRatio: wm.prompt_fraction,
+      maxMessages: wm.max_messages,
+      maxAge: wm.max_age_turns,
+    });
+    if (decision.compact) {
+      const fn = summarizeFn || summarize;
+      const cloneMsgs = messages.map((m) =>
+        m && Array.isArray(m.content)
+          ? { ...m, content: m.content.map((p) => ({ ...p })) }
+          : { ...m },
+      );
+      for (const i of evictableIndices) {
+        const m = cloneMsgs[i];
+        if (!m) continue;
+        if (m.role === "tool") {
+          const bodyText = messageBodyText(m);
+          if (syncTokenCount(bodyText) < minTokens) continue;
+          const tool =
+            m.name || toolNameFromCallId.get(m.tool_call_id) || "unknown";
+          const summary = await fn(
+            buildToolResultPrompt({ tool, body: bodyText }),
+            {
+              url: summarizerCfg.url,
+              timeoutMs: summarizerCfg.request_timeout_ms,
+              maxTokens: summarizerCfg.max_tokens,
+              model: summarizerCfg.model,
+              logger,
+            },
+          );
+          if (typeof summary !== "string" || summary.length === 0) continue;
+          summarizedCount++;
+          if (summarizerCfg.mode === "enforce") {
+            const wrapped = `<tool_result_summary tool="${tool}">${summary}</tool_result_summary>`;
+            cloneMsgs[i] = { ...m, content: wrapped };
+          }
+        } else if (Array.isArray(m.content)) {
+          for (let p = 0; p < m.content.length; p++) {
+            const part = m.content[p];
+            if (!part || part.type !== "tool_result") continue;
+            const bodyText =
+              typeof part.content === "string"
+                ? part.content
+                : messageBodyText({ content: part.content });
+            if (syncTokenCount(bodyText) < minTokens) continue;
+            const callId = part.tool_use_id || part.tool_call_id;
+            const tool =
+              toolNameFromCallId.get(callId) || part.name || "unknown";
+            const summary = await fn(
+              buildToolResultPrompt({ tool, body: bodyText }),
+              {
+                url: summarizerCfg.url,
+                timeoutMs: summarizerCfg.request_timeout_ms,
+                maxTokens: summarizerCfg.max_tokens,
+                model: summarizerCfg.model,
+                logger,
+              },
+            );
+            if (typeof summary !== "string" || summary.length === 0) continue;
+            summarizedCount++;
+            if (summarizerCfg.mode === "enforce") {
+              const wrapped = `<tool_result_summary tool="${tool}">${summary}</tool_result_summary>`;
+              m.content[p] = { ...part, content: wrapped };
+            }
+          }
+        }
+      }
+      workingMessages = cloneMsgs;
+    }
+  }
+
   const { rewrittenMessages, elidedIds } = applyTier1({
-    messages,
+    messages: workingMessages,
     evictableIndices,
     opts: {
       minTokens,
@@ -134,6 +228,7 @@ export async function rewriteRequest({
       orig_tokens: origTokens,
       rewritten_tokens: rewrittenTokens,
       elided_tool_result_ids: elidedIds,
+      summarized_count: summarizedCount,
     },
   };
 }

@@ -184,6 +184,8 @@ export function createProxyServer({
           tokenizer,
           config,
           cacheDir: config.cache_dir,
+          nCtx: upstream?.nCtx || 0,
+          logger,
         });
       } catch (err) {
         logger.warn(

@@ -23,9 +23,29 @@ const DEFAULTS = {
   cache_dir: "~/.cache/qwen-compact",
   tokenizer: { cache_entries: 4096 },
   log_level: "info",
+  // Phase 2 recursive summarizer (Tier 3). Off by default — set
+  // `summarizer.url` to enable. `mode` mirrors the main proxy modes:
+  //   off         — never call (default).
+  //   passthrough — never call (alias for off; symmetry with main proxy).
+  //   shadow      — call, log the summary, but DON'T replace the tool result
+  //                 (still falls through to Tier 1 stub).
+  //   enforce     — call, replace the tool-result body with the summary.
+  summarizer: {
+    url: "",
+    mode: "off",
+    request_timeout_ms: 8000,
+    max_tokens: 512,
+    model: "qwen-compact-summarizer",
+  },
 };
 
 const VALID_MODES = new Set(["passthrough", "shadow", "enforce"]);
+const VALID_SUMMARIZER_MODES = new Set([
+  "off",
+  "passthrough",
+  "shadow",
+  "enforce",
+]);
 
 function expandHome(p) {
   if (!p) return p;
@@ -69,6 +89,16 @@ export function loadConfig(configPath) {
   if (!VALID_MODES.has(cfg.mode)) {
     throw new Error(
       `invalid mode '${cfg.mode}'; must be one of ${[...VALID_MODES].join(", ")}`,
+    );
+  }
+  // Env override for the summarizer URL (handy for tests and ad-hoc enable).
+  if (process.env.QWEN_COMPACT_SUMMARIZER_URL) {
+    cfg.summarizer = cfg.summarizer || {};
+    cfg.summarizer.url = process.env.QWEN_COMPACT_SUMMARIZER_URL;
+  }
+  if (cfg.summarizer && !VALID_SUMMARIZER_MODES.has(cfg.summarizer.mode)) {
+    throw new Error(
+      `invalid summarizer.mode '${cfg.summarizer.mode}'; must be one of ${[...VALID_SUMMARIZER_MODES].join(", ")}`,
     );
   }
   // Phase 1: passthrough | shadow | enforce all wired. Tier 0 + Tier 1 only.

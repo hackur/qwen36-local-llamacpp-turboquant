@@ -19,10 +19,10 @@ output.
   tuning is built on.
 - Adds an `x-proxy-request-id` response header that matches the JSONL row.
 
-Phase 0 (instrumentation) and Phase 1 (Tier-1 tool-result elision +
-`expand_tool_result` phantom tool) are wired up. Phases 2/3 (small-model
-recursive summarization, KV stable-prefix cooperation) are stubbed in config but
-not implemented.
+Phase 0 (instrumentation), Phase 1 (Tier-1 tool-result elision +
+`expand_tool_result` phantom tool), and Phase 2 (small-model recursive
+summarization, off by default — set `summarizer.url`) are implemented. Phase 3
+(KV stable-prefix cooperation) is still stubbed in config but not implemented.
 
 ## When to use it
 
@@ -81,6 +81,7 @@ is recorded in the JSONL row so you can split before/after metrics later.
 | upstream base URL             | `http://127.0.0.1:10501`      | `QWEN_COMPACT_UPSTREAM`     |
 | mode                          | `passthrough`                 | `QWEN_COMPACT_MODE`         |
 | config file                   | `proxy/config.yaml`           | `QWEN_COMPACT_CONFIG`       |
+| summarizer URL (Phase 2)      | _empty_ (off)                 | `QWEN_COMPACT_SUMMARIZER_URL` |
 
 ## Where artifacts persist
 

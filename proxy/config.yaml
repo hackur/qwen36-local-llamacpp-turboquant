@@ -43,3 +43,17 @@ tokenizer:
 
 # pino log level for the process logger (stdout). Per-request JSONL is separate.
 log_level: "info"
+
+# Phase 2 recursive summarizer (Tier 3). Off by default. Set `url` to enable —
+# scripts/start-summarizer.sh launches the small model on :10503.
+#   off|passthrough — never call (default).
+#   shadow          — call and log; do NOT replace the tool-result body.
+#   enforce         — replace oversized tool-result bodies with the summary
+#                     before Tier 1 sees them. Falls through to Tier 1 stub
+#                     on any summarizer error (offline, timeout, bad JSON).
+summarizer:
+  url: ""
+  mode: "off"
+  request_timeout_ms: 8000
+  max_tokens: 512
+  model: "qwen-compact-summarizer"

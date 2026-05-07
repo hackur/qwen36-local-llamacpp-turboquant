@@ -70,13 +70,17 @@ mkdir -p "$REPO/logs"
 
 if ! "$BIN" -h 2>&1 | grep -q -- "$KV"; then KV=q8_0; fi
 
-echo "▶ vision @ http://127.0.0.1:$PORT  (KV=$KV, ${CTX} ctx, mmproj loaded)"
+# mixed-kv-guard:v1 — derive KV_K / KV_V from KV (unless overridden) and warn on mismatch.
+apply_kv_split
+
+KV_DESC="$KV_K"; [[ "$KV_K" != "$KV_V" ]] && KV_DESC="${KV_K}/${KV_V}"
+echo "▶ vision @ http://127.0.0.1:$PORT  (KV=$KV_DESC, ${CTX} ctx, mmproj loaded)"
 TURBO_LAYER_ADAPTIVE=1 exec "$BIN" \
   -m "$MODEL" \
   --mmproj "$MMPROJ" \
   --port "$PORT" \
   -c "$CTX" \
-  -ctk "$KV" -ctv "$KV" \
+  -ctk "$KV_K" -ctv "$KV_V" \
   "${COMMON[@]}" \
   "${SAMPLING[@]}" \
   --alias qwen3.6-vision \

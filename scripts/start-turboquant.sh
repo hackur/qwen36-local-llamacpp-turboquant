@@ -43,14 +43,24 @@ if ! grep -q -- "$KV" <<< "$HELP_OUT"; then
   KV=q8_0
 fi
 
+# mixed-kv-guard:v1 — derive KV_K / KV_V from KV (unless overridden) and warn on mismatch.
+apply_kv_split
+
 # Optional YaRN RoPE flags. Empty array if no scaling requested.
 # shellcheck disable=SC2207
 ROPE_FLAGS=( $(rope_args) )
 
+# metrics-opt-in:v1 — set METRICS=1 to enable Prometheus /metrics endpoint.
+METRICS_FLAGS=()
+if [[ "${METRICS:-0}" == "1" || "${METRICS:-0}" == "true" ]]; then
+  METRICS_FLAGS=(--metrics)
+fi
+
 ROPE_DESC=""
 [[ -n "${ROPE_SCALING:-}" ]] && ROPE_DESC=" rope=${ROPE_SCALING}@${ROPE_SCALE:-1.0}x(orig=${YARN_ORIG_CTX:-?})"
 
-echo "▶ turboquant @ http://127.0.0.1:$PORT  (KV=$KV, ${CTX} ctx${ROPE_DESC})"
+KV_DESC="$KV_K"; [[ "$KV_K" != "$KV_V" ]] && KV_DESC="${KV_K}/${KV_V}"
+echo "▶ turboquant @ http://127.0.0.1:$PORT  (KV=$KV_DESC, ${CTX} ctx${ROPE_DESC})"
 echo "  TURBO_LAYER_ADAPTIVE=1   log → $LOG"
 if (( DRY_RUN )); then
   printf "dry-run:"
@@ -58,10 +68,11 @@ if (( DRY_RUN )); then
     -m "$MODEL" \
     --port "$PORT" \
     -c "$CTX" \
-    -ctk "$KV" -ctv "$KV" \
+    -ctk "$KV_K" -ctv "$KV_V" \
     "${COMMON[@]}" \
     "${SAMPLING[@]}" \
     ${ROPE_FLAGS[@]+"${ROPE_FLAGS[@]}"} \
+    ${METRICS_FLAGS[@]+"${METRICS_FLAGS[@]}"} \
     --alias qwen3.6-turboquant
   printf " 2>&1 | tee %q\n" "$LOG"
   exit 0
@@ -71,9 +82,10 @@ TURBO_LAYER_ADAPTIVE=1 exec "$BIN" \
   -m "$MODEL" \
   --port "$PORT" \
   -c "$CTX" \
-  -ctk "$KV" -ctv "$KV" \
+  -ctk "$KV_K" -ctv "$KV_V" \
   "${COMMON[@]}" \
   "${SAMPLING[@]}" \
   ${ROPE_FLAGS[@]+"${ROPE_FLAGS[@]}"} \
+  ${METRICS_FLAGS[@]+"${METRICS_FLAGS[@]}"} \
   --alias qwen3.6-turboquant \
   2>&1 | tee "$LOG"

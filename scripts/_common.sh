@@ -99,6 +99,26 @@ load_model_defaults() {
   fi
 }
 
+# mixed-kv-guard:v1 — warn on mismatched K vs V cache types.
+# Mixed K/V cache types (e.g. -ctk q8_0 -ctv f16) trigger ~50% slower attention
+# than matched types — see HANDOFF.md / docs/troubleshooting.md.
+# Env contract:
+#   KV    — applied to both K and V unless overridden (default source-of-truth)
+#   KV_K  — overrides K only
+#   KV_V  — overrides V only
+# Sets KV_K and KV_V in the current shell. Callers should pass
+# `-ctk "$KV_K" -ctv "$KV_V"` after invoking this. If KV_K != KV_V, prints a
+# stderr warning unless MIXED_KV_OK=1 is set.
+apply_kv_split() {
+  KV_K="${KV_K:-$KV}"
+  KV_V="${KV_V:-$KV}"
+  if [[ "$KV_K" != "$KV_V" && "${MIXED_KV_OK:-0}" != "1" ]]; then
+    echo "⚠️  Mixed K/V cache types: -ctk $KV_K vs -ctv $KV_V" >&2
+    echo "    Mismatched K/V types are ~50% slower than matched (see docs/troubleshooting.md)." >&2
+    echo "    Set KV=<type> to match both, or MIXED_KV_OK=1 to silence this warning." >&2
+  fi
+}
+
 # rope_args — emit llama-server flags for YaRN scaling, or nothing.
 #   Reads ROPE_SCALING, ROPE_SCALE, YARN_ORIG_CTX from the environment.
 #   Use:  ROPE_FLAGS=( $(rope_args) )  ;  ${BIN} ... "${ROPE_FLAGS[@]}"

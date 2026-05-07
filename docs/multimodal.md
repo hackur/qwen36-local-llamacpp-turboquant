@@ -62,7 +62,7 @@ The 64 GB on this M3 Max isn't enough for `qwen36-35b` text + `qwen36-35b` visio
 - **`qwen36-35b` text on :10501 + `gemma4-e4b` vision on :10503** — ~28 + 8 GB, fits
 - **`qwen35-9b` text on :10501 + `qwen35-9b` vision on :10503** — ~9 + 9 GB easily fits, lets you ask vision-and-text in parallel
 
-Don't try `qwen36-35b` text + `gemma4-26b` vision — combined 28 + 16 = 44 GB on top of compute scratch will OOM.
+Don't try `qwen36-35b` text + `gemma4-26b` vision — combined 28 + 16 = 44 GB on top of compute scratch will OOM. `scripts/start-vision.sh` now enforces this with a memory pre-flight (sentinel `# memory-preflight:v1`) that estimates model GGUF size + mmproj + 1.5 GiB KV scratch + summed RSS of any running `llama-server` PIDs + 4 GiB headroom and aborts unless `FORCE=1` — the qwen36-35b text + gemma4-26b vision combo, previously only an informational warning, is now actively guarded.
 
 ## VRAM cost of vision
 

@@ -53,8 +53,10 @@ make start                              # uses turbo3, defaults from start-turbo
 ```bash
 MODEL=qwen36-35b ./scripts/start-turboquant.sh
 # CTX=262144 and KV=turbo3 come from configs/model-defaults.env;
-# override per-launch with CTX=… or KV=… if needed.
+# override per-launch e.g. `MODEL=qwen36-35b CTX=200000 ./scripts/start-turboquant.sh`.
 ```
+
+Per-model CTX/KV defaults (and the optional RoPE/YaRN knobs) live in [`configs/model-defaults.env`](../configs/model-defaults.env) — that file is the canonical guide; precedence is env > per-model > generic > script default.
 
 **Strengths:** Highest gen tok/s on this hardware (61–63 tok/s sustained), **native 256K context** (`n_ctx_train = 262144`; turbo3 KV measured at ~1.3 GiB total at full ctx — hybrid arch keeps KV tiny), MoE means only ~3 B params are active per token. Vision-capable via `mmproj`. Now `MODEL_FALLBACK` in `scripts/_common.sh` — kept for raw-throughput workloads.
 
@@ -368,6 +370,18 @@ For prompts above ~50 K tokens, `qwen36-neo` (256K trained, default) and `qwen36
 ```bash
 curl -s http://127.0.0.1:10501/slots | jq '.[0] | {n_prompt_tokens_processed, n_decoded}'
 ```
+
+#### When the context fills up — snapshot the conversation
+
+For long-running sessions that fill the 256K window, have the model summarize itself to disk, then start fresh with that summary as the system prompt. Verified end-to-end (a 7-turn synthetic chat compacted to ~1.4 KB JSON; a fresh session loaded with that JSON recovered every named specific — package versions, goroutine-leak details, etc.).
+
+1. With the running server, POST the full conversation plus a final user turn asking for a structured JSON summary (every named entity, decision, and unresolved question). Use `temperature: 0.2`, `enable_thinking: false`, and a generous `max_tokens` (~12000).
+2. Save the assistant's reply to `snapshots/conv-$(date +%Y%m%d-%H%M%S).json` (the `snapshots/` directory is gitignored).
+3. Stop the server (`make stop`).
+4. Start a fresh server (`make start`) and use the saved JSON as the `system` message of a new conversation.
+5. Continue from there — re-loading 1–2 KB is cheap.
+
+If the live conversation has already exceeded 256K and won't fit even for the summarization call, see the YaRN-extended single-shot recipe in [`configs/model-defaults.env`](../configs/model-defaults.env) (RoPE / YaRN section).
 
 ---
 

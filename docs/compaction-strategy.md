@@ -14,6 +14,18 @@ This is the design doc. The original sumy-based spike that prompted this work
 is folded in as Appendix A (§13) and surfaces in the pipeline as the Tier-4
 fallback.
 
+> **Scope: proxy-driven vs manual one-shot.** This doc covers the auto-applied,
+> multi-tier compaction that runs inside the `:11500` proxy — rewrite passes,
+> summarizer recursion, tier fallbacks, and the rest of the pipeline below. A
+> separate, manual recipe also exists: ask the model itself to compact a long
+> conversation to JSON, save the result under `snapshots/`, and reload it in a
+> fresh session. The two are complementary — proxy compaction is for autonomous
+> code-agent sessions that should never stall, while the manual snapshot is for
+> explicit human-driven save-points before a session overflows. See
+> `configs/model-defaults.env` (RoPE section) and the matching subsection in
+> `usage.md` for the YaRN-extended variant when you want one final extra-long
+> compaction call before saving.
+
 ---
 
 ## 1. Why compact at all

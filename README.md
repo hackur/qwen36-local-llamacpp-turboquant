@@ -149,7 +149,7 @@ Makefile              ergonomic wrappers
 Qwen-Offline.command  double-click launcher (Finder)
 scripts/              build, start-*, stop-all, status, bench, needle, demo, healthcheck, symlink
 clients/              python-demo.py · web-demo.html
-configs/              opencode, continue, launchd plist, sampling
+configs/              opencode, continue, launchd plist, sampling, model-defaults.env (per-alias CTX/KV/RoPE)
 docs/                 architecture, offline-mode, multimodal, troubleshooting, references, …
 benchmarks/           RESULTS.md + raw run logs
 vendor/               llama.cpp-mainline + llama-cpp-turboquant (gitignored)

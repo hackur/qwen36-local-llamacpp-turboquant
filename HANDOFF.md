@@ -228,3 +228,63 @@ Rewrote `scripts/demo-chat.sh` as a Python module. Three real bugs the user hit,
 
 ### Architecture
 Single file, stdlib only. Pure functions for SSE parsing (`parse_sse_stream`), C0 sanitization (`sanitize_chunk`), and history pruning (`prune_to_chars`) — they take iterables and return iterables, so unit tests feed them byte fixtures with no sockets. I/O is isolated in a `StreamConnection` object that owns the urllib request and a cancel flag, so SIGINT during streaming flips the flag, closes the response cleanly, and returns to the prompt without leaking the connection or losing history.
+
+---
+
+## Round 6 — context, KV math, hardening
+
+This round started from a single observation — the 35B-A3B server was being launched with `-c 131072` despite a `n_ctx_train` of 262144 — and ended up touching the per-model knobs, the KV-cache docs (which turned out to be wrong by 4×), the vision launcher, and a launchd-killing `set -u` bug. The compact-and-save workflow finally got proven end-to-end.
+
+### A. Per-model defaults
+
+Generic env-var overrides are fine until the right CTX for one model is wrong for another. Added `configs/model-defaults.env` plus `load_model_defaults` and `rope_args` in `scripts/_common.sh`, wired into `scripts/start-turboquant.sh`. Precedence: explicit env > per-model default > generic default > script-default.
+
+The first beneficiary was `qwen36-35b`: default CTX **131072 → 262144** (its full `n_ctx_train`). Surprise during measurement — KV at turbo3/256K landed at **1344 MiB**, not the ~3 GiB the 11.6 KiB/tok @ 64K extrapolation predicted. Turbo3's fixed overhead amortizes hard at large context, so per-token cost falls as ctx grows.
+
+### B. RoPE/YaRN escape hatch
+
+For the rare case where a 256K session genuinely fills, plumbed `ROPE_SCALING` / `ROPE_SCALE` / `YARN_ORIG_CTX` env vars through `start-turboquant.sh` as `--rope-scaling --rope-scale --yarn-orig-ctx`. The intended workflow:
+
+1. 256K session approaches the wall.
+2. Spin up a transient YaRN-2× server on a free port (`ROPE_SCALING=yarn ROPE_SCALE=2.0 YARN_ORIG_CTX=262144`).
+3. Ask the model to compact the conversation to JSON; save it.
+4. Reload the JSON as the system prompt of a fresh, un-scaled 256K session.
+
+This treats RoPE extrapolation as a one-shot tool, not a steady state.
+
+### C. Compact-and-save, verified
+
+7-message synthetic conversation → 1.4 KB JSON note → fresh session recovered every specific fact when re-loaded. Adopted `snapshots/` as the dump location (gitignored).
+
+### D. Vision memory pre-flight
+
+`scripts/start-vision.sh` now estimates total memory load *before* boot: model GGUF size + mmproj + 1.5 GiB KV scratch + summed RSS of every other live `llama-server` PID + 4 GiB headroom, compared to `hw.memsize`. Aborts unless `FORCE=1`. Sentinel: `# memory-preflight:v1`. The motivation was the obvious one — silently OOMing a 64 GB box because a vision server was launched while the primary was already resident.
+
+### E. Privacy pre-push hook (opt-in)
+
+Carved `scripts/privacy-scan.sh` out of `static-check.sh`. Added `scripts/git-hooks/pre-push` that's intended to be symlinked in by hand — not auto-installed, because we don't surprise contributors with hooks. `Makefile` gained `privacy-scan` and `prepush` targets; `CONTRIBUTING.md` got the one-liner symlink instruction.
+
+### F. KV-cache math was wrong by 4×
+
+The most consequential finding of the round. `docs/kv-cache-math.md`, `docs/architecture.md`, and `docs/context-matrix.md` had been carrying these numbers for Qwen3.6-35B-A3B:
+
+> 64 layers, 8 KV heads, head_dim 128 → ~80 KB f16/tok
+
+Re-reading the GGUF metadata directly:
+
+> **40 blocks, 2 KV heads, head_dim 256, full_attention_interval=4 → only 10 layers carry KV → ~20 KiB f16/tok**
+
+A 4× overstatement. The doc-reported "max 32K @ f16" was actually closer to **256K @ f16**. All three docs corrected.
+
+### G. The launchd-killing bug
+
+`${ROPE_FLAGS[@]}` under `set -u` is fatal on macOS bash 3.2 when the array is empty — which is the no-RoPE common case, i.e. every normal boot. Both occurrences in `start-turboquant.sh` now use `${ROPE_FLAGS[@]+"${ROPE_FLAGS[@]}"}`. The launchd-managed primary had been spin-restarting in a loop until this got patched. Worth remembering the next time we add an array of optional flags.
+
+### H. Misc
+
+- `# port-guard:v1` sentinel added to `_common.sh`'s `ensure_port_free`.
+- `docs/system-info.md` date refreshed 2026-04-27 → 2026-05-06.
+- `docs/troubleshooting.md` picked up sections for proxy port `:11500`, run-to-run variance, mixed-K/V slowdown, port-guard, and privacy-gate failures.
+- `docs/m5-readiness.md` confirms pre-M5 LUT path via existing dogfood logs and tags tensor-API items as wait-for-M5.
+- `docs/install-models.md` cosmetic skip-message wording fix.
+- `proxy/eval/ab-harness/` scaffold landed (no behaviour yet).

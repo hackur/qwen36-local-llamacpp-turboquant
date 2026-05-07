@@ -52,6 +52,9 @@ Generation rate has been observed at 4.75–14.49 tok/s across back-to-back 128K
 - Confirm the server was started with `-c 131072` (default in `start-turboquant.sh`).
 - If the build ran out of memory allocating the KV cache at start, it would have logged "ggml_metal: failed to allocate buffer". Reduce `-c` or use a smaller KV type.
 
+### RoPE / YaRN scaling no-ops or breaks coherence
+If you set `ROPE_SCALING=yarn` but forget `YARN_ORIG_CTX`, llama.cpp assumes the original context equals the requested `n_ctx` and the scaling effectively no-ops — you get the long context flag without the reposition math. Always set `YARN_ORIG_CTX` to the model's *training* context (e.g. 32768 for Qwen3.6). Past ~4× scaling, coherence breaks regardless: treat YaRN as a single-shot escape hatch for one prompt that must fit, not a default for the server.
+
 ### Quality regression on TurboQuant vs baseline
 Run `scripts/quality-check.sh` and diff outputs. turbo3 trades some bits for context — if a prompt is sensitive to recall fidelity, route it to baseline (port 10500).
 
@@ -101,6 +104,9 @@ See [`docs/usage.md`](usage.md#json--structured-output).
 
 ### `rotate-logs.sh` errors with `File: unbound variable`
 You have GNU coreutils' `stat` in PATH (e.g. via `brew install coreutils` aliasing `stat` → `gstat`). GNU `stat -f` means "filesystem info"; BSD `stat -f` means "format". Already fixed in `rotate-logs.sh` (uses `wc -c`), but if you've forked and re-introduced `stat`, switch to `wc -c < file` for portability.
+
+### launchd spin-restarts; `logs/launchd.err` repeats `ROPE_FLAGS[@]: unbound variable`
+macOS ships `/bin/bash` 3.2, where `set -u` plus expanding an empty array via `"${arr[@]}"` raises `unbound variable` — so the primary spin-restarts under launchd and never serves traffic. Symptom: `start-turboquant.sh: line 70: ROPE_FLAGS[@]: unbound variable` repeated in `logs/launchd.err`. Fix: use the `${arr[@]+"${arr[@]}"}` idiom when expanding possibly-empty arrays under `set -u`. Already applied in the current scripts; this entry is for users writing similar helpers.
 
 ### `make needle` returns HTTP 400
 The needle test asks for ~50K tokens. If the running server's `n_ctx` is smaller (default for `start-turboquant.sh` is 128K, but anything you've launched with `CTX=32768` etc. won't accept 50K). Either:

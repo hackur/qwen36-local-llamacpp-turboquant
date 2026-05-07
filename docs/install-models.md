@@ -70,6 +70,8 @@ MODELS_ROOT=~/ggufs ./scripts/symlink-models.sh
 
 The download itself needs network; once done, everything is offline.
 
+When adding a new alias, also add a `case` branch to [`configs/model-defaults.env`](../configs/model-defaults.env) — that's where per-model CTX / KV / RoPE defaults live.
+
 ## After symlinking
 
 ```bash

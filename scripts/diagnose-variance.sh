@@ -43,8 +43,11 @@ run()     { printf "$ %s\n" "$*" >> "$OUT"; "$@" >> "$OUT" 2>&1 || echo "(exit $
 section "pmset -g therm"
 run pmset -g therm
 
-section "pmset -g thermlog (last 5 lines)"
-pmset -g thermlog 2>&1 | tail -5 >> "$OUT" || true
+section "pmset -g thermlog (2s sample, last 5 lines)"
+# pmset -g thermlog is a streaming command and never exits on its own — wrap in
+# a 2s timeout so we don't hang the diagnostic forever (this once held a
+# 49-minute parent shell hostage).
+( pmset -g thermlog 2>&1 & p=$!; sleep 2; kill "$p" 2>/dev/null; wait "$p" 2>/dev/null ) | tail -5 >> "$OUT" || true
 
 # 2) Memory pressure / paging — the "compressor" line is the key signal for
 #    GPU starvation on unified-memory Macs (qwen36-neo resident ~22 GB on 64 GB).

@@ -11,9 +11,7 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 fi
 
 PORT="${PORT:-10501}"
-CTX="${CTX:-131072}"
 MODEL_INPUT="${MODEL:-$MODEL_PRIMARY}"
-KV="${KV:-turbo3}"   # turbo2 / turbo3 / turbo4 / q8_0 / q4_0 / f16
 BIN="$REPO/vendor/llama-cpp-turboquant/build/bin/llama-server"
 LOG="$REPO/logs/turboquant.log"
 
@@ -21,6 +19,14 @@ LOG="$REPO/logs/turboquant.log"
 resolve_model "$MODEL_INPUT"
 MODEL="$RESOLVED_MODEL"
 ensure_model "$MODEL"
+
+# Per-model defaults for CTX / KV / RoPE. Anything already in env wins; the
+# rest is filled from configs/model-defaults.env. See that file for guidance
+# on adding a new alias or extending ctx past n_ctx_train via YaRN.
+load_model_defaults "$MODEL_INPUT"
+CTX="${CTX:-131072}"
+KV="${KV:-turbo3}"   # turbo2 / turbo3 / turbo4 / q8_0 / q4_0 / f16
+
 ensure_port_free "$PORT"
 mkdir -p "$REPO/logs"
 
@@ -37,7 +43,14 @@ if ! grep -q -- "$KV" <<< "$HELP_OUT"; then
   KV=q8_0
 fi
 
-echo "▶ turboquant @ http://127.0.0.1:$PORT  (KV=$KV, ${CTX} ctx)"
+# Optional YaRN RoPE flags. Empty array if no scaling requested.
+# shellcheck disable=SC2207
+ROPE_FLAGS=( $(rope_args) )
+
+ROPE_DESC=""
+[[ -n "${ROPE_SCALING:-}" ]] && ROPE_DESC=" rope=${ROPE_SCALING}@${ROPE_SCALE:-1.0}x(orig=${YARN_ORIG_CTX:-?})"
+
+echo "▶ turboquant @ http://127.0.0.1:$PORT  (KV=$KV, ${CTX} ctx${ROPE_DESC})"
 echo "  TURBO_LAYER_ADAPTIVE=1   log → $LOG"
 if (( DRY_RUN )); then
   printf "dry-run:"
@@ -48,6 +61,7 @@ if (( DRY_RUN )); then
     -ctk "$KV" -ctv "$KV" \
     "${COMMON[@]}" \
     "${SAMPLING[@]}" \
+    "${ROPE_FLAGS[@]}" \
     --alias qwen3.6-turboquant
   printf " 2>&1 | tee %q\n" "$LOG"
   exit 0
@@ -60,5 +74,6 @@ TURBO_LAYER_ADAPTIVE=1 exec "$BIN" \
   -ctk "$KV" -ctv "$KV" \
   "${COMMON[@]}" \
   "${SAMPLING[@]}" \
+  "${ROPE_FLAGS[@]}" \
   --alias qwen3.6-turboquant \
   2>&1 | tee "$LOG"

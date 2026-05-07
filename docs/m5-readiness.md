@@ -9,10 +9,12 @@ ggml_metal_library_init: turbo3 using 4-mag LUT (pre-M5 hardware)
 
 **Translation:** the kernel detects M-series generation. M3 Max (this Mac) is "pre-M5" and uses a lookup-table dequant path. Apple's M5 (rumored late-2026) ships dedicated tensor-multiply hardware exposed via the Metal Tensor API — when we move to M5, the same binary will switch to the fast-path automatically. No config change.
 
+Confirmed observed verbatim in M3 Max startup logs (e.g. `logs/dogfood-gemma4-26b.log`): `has tensor = false` plus the two banner lines above. M5 fast-path activation is **wait for M5 hardware**.
+
 ## What that means in practice
 
 - **Today on M3 Max**: turbo3 = LUT dequant on each KV read. Adds ~3% latency vs f16 (we measured this).
-- **Tomorrow on M5**: turbo3 should approach f16 performance because the dequant happens in a single tensor-op alongside the attention matmul.
+- **Tomorrow on M5**: turbo3 should approach f16 performance because the dequant happens in a single tensor-op alongside the attention matmul. (wait for M5 hardware to verify)
 
 In other words, the speed gap you're paying for context will shrink to roughly zero on the next chip generation.
 
@@ -23,7 +25,9 @@ In other words, the speed gap you're paying for context will shrink to roughly z
 grep -E "tensor API|4-mag LUT|tensor cores" logs/turboquant.log
 ```
 
-On M5 you should see something like `tensor API enabled` or `turbo3 using tensor-mma path` instead of the LUT message. If you don't, re-pull the fork (`./scripts/upgrade.sh`) — M5 support may have landed in a newer commit.
+(If `logs/turboquant.log` only contains a startup-error tail from a previous run, point the grep at a fresh dogfood log such as `logs/dogfood-gemma4-26b.log` — same banner.)
+
+On M5 you should see something like `tensor API enabled` or `turbo3 using tensor-mma path` instead of the LUT message. If you don't, re-pull the fork (`./scripts/upgrade.sh`) — M5 support may have landed in a newer commit. (wait for M5 hardware)
 
 ## Should I wait for M5 to use this?
 

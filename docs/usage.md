@@ -18,7 +18,7 @@ Decide by **memory budget** first, **task** second.
 | You have… | Use |
 |---|---|
 | 64 GB RAM, want uncensored + code-tuned, **256K context** | `qwen36-neo` (default) |
-| 64 GB RAM, want highest gen tok/s on long context | `qwen36-35b` (now fallback; MoE, faster but 128K ceiling) |
+| 64 GB RAM, want highest gen tok/s on long context | `qwen36-35b` (now fallback; MoE, **256K** native, ~5.3 KiB/tok turbo3) |
 | 64 GB RAM, want a Gemma flavor for variety | `gemma4-26b` |
 | 64 GB RAM, want OpenAI-style behavior | `gpt-oss-20b` |
 | 32 GB RAM | `qwen35-9b`, `gemma4-e4b`, `crow-9b` |
@@ -51,10 +51,14 @@ make start                              # uses turbo3, defaults from start-turbo
 
 **Start:**
 ```bash
-MODEL=qwen36-35b CTX=131072 KV=turbo3 ./scripts/start-turboquant.sh
+MODEL=qwen36-35b ./scripts/start-turboquant.sh
+# CTX=262144 and KV=turbo3 come from configs/model-defaults.env;
+# override per-launch with CTX=… or KV=… if needed.
 ```
 
-**Strengths:** Highest gen tok/s on this hardware (61–63 tok/s sustained), **128K context** with TurboQuant, MoE architecture means only ~3 B params are active per token. Vision-capable via `mmproj`. Now `MODEL_FALLBACK` in `scripts/_common.sh` — kept for raw-throughput workloads.
+**Strengths:** Highest gen tok/s on this hardware (61–63 tok/s sustained), **native 256K context** (`n_ctx_train = 262144`; turbo3 KV measured at ~1.3 GiB total at full ctx — hybrid arch keeps KV tiny), MoE means only ~3 B params are active per token. Vision-capable via `mmproj`. Now `MODEL_FALLBACK` in `scripts/_common.sh` — kept for raw-throughput workloads.
+
+**Going past 256K** (RoPE / YaRN, lossy — single-shot compaction call): see [`configs/model-defaults.env`](../configs/model-defaults.env) for the recipe.
 
 **Sample prompt — reasoning (with chain-of-thought):**
 ```bash

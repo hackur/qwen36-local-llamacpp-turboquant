@@ -34,9 +34,10 @@ matching what `huggingface-cli download` lays out by default):
 | `nemotron-4b` | `lmstudio-community/NVIDIA-Nemotron-3-Nano-4B-GGUF/NVIDIA-Nemotron-3-Nano-4B-Q4_K_M.gguf` |
 | `tiny` | `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf` |
 
-Anything you didn't download will be reported as `(skip — not in <root>: …)`
-when you run the script. That's not an error — the start scripts just won't
-list those aliases in `make models`.
+Anything you didn't download will be reported as `(skip — not in LM Studio: …)`
+when you run the script (the message says "LM Studio" even when `MODELS_ROOT`
+points elsewhere). That's not an error — the start scripts just won't list
+those aliases in `make models`.
 
 ## C. Bypass aliases entirely — point `MODEL=` at any GGUF
 

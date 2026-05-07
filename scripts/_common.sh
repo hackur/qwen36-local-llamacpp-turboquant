@@ -77,3 +77,35 @@ ensure_model() {
     exit 1
   fi
 }
+
+# load_model_defaults <alias-or-path>
+#   Sources configs/model-defaults.env with MODEL_ALIAS exported, so the
+#   case statement there can set CTX/KV/ROPE_* via `: "${VAR:=...}"`.
+#   Anything already in the environment wins; per-model defaults fill the rest.
+#   Path inputs (containing "/" or ending .gguf) skip per-alias defaults and
+#   only get the generic block — pass MODEL_ALIAS=foo if you want a specific
+#   per-alias entry to apply to a literal path.
+load_model_defaults() {
+  local in="$1"
+  if [[ "$in" == */* || "$in" == *.gguf ]]; then
+    MODEL_ALIAS="${MODEL_ALIAS:-}"
+  else
+    MODEL_ALIAS="${MODEL_ALIAS:-$in}"
+  fi
+  local f="$REPO/configs/model-defaults.env"
+  if [[ -r "$f" ]]; then
+    # shellcheck disable=SC1090
+    source "$f"
+  fi
+}
+
+# rope_args — emit llama-server flags for YaRN scaling, or nothing.
+#   Reads ROPE_SCALING, ROPE_SCALE, YARN_ORIG_CTX from the environment.
+#   Use:  ROPE_FLAGS=( $(rope_args) )  ;  ${BIN} ... "${ROPE_FLAGS[@]}"
+rope_args() {
+  if [[ -n "${ROPE_SCALING:-}" ]]; then
+    printf -- "--rope-scaling %s " "$ROPE_SCALING"
+    [[ -n "${ROPE_SCALE:-}" ]]    && printf -- "--rope-scale %s "    "$ROPE_SCALE"
+    [[ -n "${YARN_ORIG_CTX:-}" ]] && printf -- "--yarn-orig-ctx %s " "$YARN_ORIG_CTX"
+  fi
+}

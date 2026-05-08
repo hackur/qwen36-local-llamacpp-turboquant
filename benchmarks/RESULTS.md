@@ -78,6 +78,40 @@ Linear-ish decay run-over-run is the classic Apple-Silicon GPU-throttle signatur
 
 Quality at the same `:10501` was perfect over 5 fixed prompts (`benchmarks/quality-20260507-155948/`) — the model isn't hallucinating from heat, it's just slower. Recommendation: cool the chassis 5–10 minutes between sustained 3-run benches; for repeatable numbers, pin to AC + wait for thermal floor.
 
+## 2026-05-07 — qwen36-neo turbo3 @131K, 100K-needle long-context recall
+
+Needle recovered at depth 50% on the live primary after a launchd
+restart. Prompt chars 400119 → tokenized to **72546 tokens** (the
+script's 4-char/token estimate was conservative for the UNIT text
+chosen). Reply: `fjord-mango-pinwheel-9421`, exact match.
+
+| metric | value |
+|---|---:|
+| prompt_n | 72 546 |
+| prefill tok/s | 43.9 |
+| gen tok/s | 4.5 |
+| wall | 1654.5 s (27.5 min) |
+| needle present | true |
+
+Note the prefill rate (~44 tok/s) is roughly half of the cool-chassis
+expectation (~90+ tok/s seen on the 30K probe earlier in this
+session). System was under heavy compressed-swap pressure (25.8 GiB
+swap used / 27 GiB total) from a prior orphan-server incident — see
+the bench-summarizer teardown bug fix in this release. A re-run on a
+clean process state should see the prefill rate roughly double; recall
+correctness held regardless.
+
+Smaller-target probes during the same window:
+- 5K @ 50% — recovered, 96 tok/s prefill, 8.9 tok/s gen, 48 s wall
+- 30K @ 50% — recovered (prompt_n 18516), 92.9 tok/s prefill, 5.4 tok/s gen, 202 s wall
+
+The 50K probe via `make needle` timed out at the script's 600 s default
+on the loaded primary. Inline retry with a 25 min cap timed out
+similarly because of an unrelated prompt-size miscount (built a 267 K
+char prompt instead of 50 K), which the server correctly rejected with
+HTTP 400. The 100K result above used `scripts/needle.py`'s exact
+prompt-construction logic via inline call with timeout=1800 s.
+
 Baseline `:10500` was not running this round (one-server-at-a-time policy after a smell event); A/B diff against baseline f16 deferred to a future cool-chassis session.
 
 ## Reproduce

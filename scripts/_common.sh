@@ -78,6 +78,17 @@ ensure_model() {
   fi
 }
 
+# help-from-header:v1 — print the script's leading `#`-comment block as usage.
+# Strips the shebang and the leading `# ` from each line; stops at the first
+# non-comment line. Use as:
+#     case "${1:-}" in -h|--help) print_help_from_header; exit 0 ;; esac
+# right after sourcing _common.sh, so `--help` never triggers any side effects
+# (e.g. accidentally launching llama-server).
+print_help_from_header() {
+  local f="${1:-${BASH_SOURCE[1]:-$0}}"
+  awk '/^#!/{next} /^[^#]/{exit} {sub(/^# ?/,""); print}' "$f"
+}
+
 # load_model_defaults <alias-or-path>
 #   Sources configs/model-defaults.env with MODEL_ALIAS exported, so the
 #   case statement there can set CTX/KV/ROPE_* via `: "${VAR:=...}"`.

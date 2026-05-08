@@ -21,6 +21,8 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_common.sh"
 
+case "${1:-}" in -h|--help) print_help_from_header; exit 0 ;; esac
+
 COOLDOWN=60
 if [[ "${1:-}" == "--no-cooldown" ]]; then
   COOLDOWN=0

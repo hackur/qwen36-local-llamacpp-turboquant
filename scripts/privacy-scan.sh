@@ -3,6 +3,10 @@
 # and credential-shaped strings. Exits non-zero on any match.
 # Kept in sync with the same block in scripts/static-check.sh.
 set -euo pipefail
+
+case "${1:-}" in
+  -h|--help) awk '/^#!/{next} /^[^#]/{exit} {sub(/^# ?/,""); print}' "$0"; exit 0 ;;
+esac
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
 

@@ -23,3 +23,10 @@ __pycache__/
 .ssh/
 secrets/
 proxy/eval/ab-harness/out/
+benchmarks/sweep-*.md
+benchmarks/sparse-v-ablation-*.md
+benchmarks/np-concurrency-*.md
+benchmarks/spec-decode-*.md
+benchmarks/summarizer-bench-*.md
+benchmarks/battery-ac-*.md
+logs/summarizer-bench-*/

@@ -16,6 +16,8 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_common.sh"
 
+case "${1:-}" in -h|--help) print_help_from_header; exit 0 ;; esac
+
 MODEL_INPUT="${MODEL:-qwen36-neo}"
 PORT="${PORT:-10597}"
 BIN="$REPO/vendor/llama-cpp-turboquant/build/bin/llama-server"

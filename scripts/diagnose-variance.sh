@@ -18,6 +18,10 @@
 # then diff variance-*.log against the print_timing block in launchd.out.
 
 set -uo pipefail
+
+case "${1:-}" in
+  -h|--help) awk '/^#!/{next} /^[^#]/{exit} {sub(/^# ?/,""); print}' "$0"; exit 0 ;;
+esac
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="$REPO/logs"
 mkdir -p "$LOG_DIR"

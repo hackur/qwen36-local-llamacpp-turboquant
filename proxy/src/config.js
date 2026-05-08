@@ -19,6 +19,11 @@ const DEFAULTS = {
     tool_result_min_tokens: 2000,
     max_messages: 40,
     max_age_turns: 20,
+    // Tier-0 (verbatim) selection — these were consumed at rewrite.js with
+    // inline `?? 8` / `?? 8000` fallbacks; kept here so a partial user
+    // override in config.yaml doesn't silently drop them via deepMerge.
+    verbatim_keep_turns: 8,
+    verbatim_keep_tokens: 8000,
   },
   cache_dir: "~/.cache/qwen-compact",
   tokenizer: { cache_entries: 4096 },

@@ -20,6 +20,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_common.sh"
 
+case "${1:-}" in -h|--help) print_help_from_header; exit 0 ;; esac
+
 MODEL_INPUT="${MODEL:-qwen36-neo}"
 PORT="${PORT:-10596}"
 DRAFT_TOKENS="${DRAFT_TOKENS:-8}"

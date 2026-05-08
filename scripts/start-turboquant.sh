@@ -27,7 +27,11 @@ load_model_defaults "$MODEL_INPUT"
 CTX="${CTX:-131072}"
 KV="${KV:-turbo3}"   # turbo2 / turbo3 / turbo4 / q8_0 / q4_0 / f16
 
-ensure_port_free "$PORT"
+# Skip port-guard on dry-run — we never actually bind, and a busy port shouldn't
+# stop a `--dry-run` from previewing the command line.
+if (( ! DRY_RUN )); then
+  ensure_port_free "$PORT"
+fi
 mkdir -p "$REPO/logs"
 
 # Probe the binary for the requested cache type.

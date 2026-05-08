@@ -145,6 +145,23 @@ forcing OOM-adjacent paging — Activity Monitor will show swap climbing), or
 either client erroring with HTTP 503 / slot-busy (the server is oversubscribed
 for this hardware).
 
+### `scripts/test-battery-ac.sh` — battery vs AC sustained-load bench
+Runs `bench.py` `RUNS` times (default 3) on the current power source, prompts
+the user to flip the cable, refuses to continue if `pmset -g batt` doesn't
+actually show a state change, settles for 60–90s, then repeats on the new
+source. Output is `benchmarks/battery-ac-<ts>.md` with side-by-side per-run
+gen and prompt tok/s, mean ± stddev, the captured `pmset` strings for both
+arms, and a `battery throttled X%` conclusion. Pre/post `diagnose-variance.sh`
+snapshots wrap each arm and there's a 60s cool-down between arms in addition
+to the manual prompt. Expected runtime: ~10–15 min wall including the manual
+switch. Default port `:10595` (distinct from the other runbook ports).
+**Thermal note**: battery + sustained GPU is the worst case for the chassis —
+the system clamps GPU power harder on battery and then a hot SoC makes the
+clamp bite even more, so back-to-back arms compound. If you're starting from
+an already-warm chassis, consider running a single-arm only (just the bench
+loop on whichever source you're on) and comparing against
+`benchmarks/RESULTS.md` rather than chaining both arms in one sitting.
+
 ## macOS gotchas
 
 ### `rotate-logs.sh` errors with `File: unbound variable`

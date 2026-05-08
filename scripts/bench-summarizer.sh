@@ -262,15 +262,24 @@ for alias in "${CANDIDATES[@]}"; do
 
   echo "── [$alias] starting on :$port ──"
   t_start=$(python3 -c 'import time; print(time.time())')
-  pid=$(start_model "$alias" "$port")
+  wrapper_pid=$(start_model "$alias" "$port")
   if ! wait_health "$port" 240; then
     echo "  ❌ skipping $alias (failed to start)"
-    stop_pid "$pid"
+    stop_pid "$wrapper_pid"
+    # Belt-and-suspenders: also kill anything bound to the port (the wrapper's
+    # exec | tee chain leaves llama-server reparented to init, so killing the
+    # wrapper alone leaks it. Found via the post-bench orphan-server incident.)
+    real_pid=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | head -1)
+    [[ -n "$real_pid" ]] && stop_pid "$real_pid"
     continue
   fi
+  # Look up the actual llama-server PID bound to the port (NOT $! from the
+  # wrapper — see comment above).
+  pid=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | head -1)
+  [[ -z "$pid" ]] && pid="$wrapper_pid"
   t_ready=$(python3 -c 'import time; print(time.time())')
   load_s=$(python3 -c "print(f'{$t_ready - $t_start:.2f}')")
-  echo "  ready in ${load_s}s (pid=$pid)"
+  echo "  ready in ${load_s}s (pid=$pid, wrapper=$wrapper_pid)"
 
   for i in "${!FIX_NAMES[@]}"; do
     fname="${FIX_NAMES[$i]}"

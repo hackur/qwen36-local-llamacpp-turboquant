@@ -29,4 +29,5 @@ benchmarks/np-concurrency-*.md
 benchmarks/spec-decode-*.md
 benchmarks/summarizer-bench-*.md
 benchmarks/battery-ac-*.md
+benchmarks/lmstudio-compare-*.md
 logs/summarizer-bench-*/

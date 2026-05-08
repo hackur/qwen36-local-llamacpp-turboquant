@@ -157,6 +157,20 @@ rate below ~30% (tokenizer mismatch — see `docs/speculative-decoding.md`
 pitfalls), or gen tok/s *below* the no-draft baseline (verifier overhead is
 exceeding the savings — try a smaller `DRAFT_TOKENS` or a different draft).
 
+### `scripts/compare-lmstudio.sh` — TurboQuant vs LM Studio head-to-head
+Runs `bench.py` `RUNS` times (default 3) against the live primary on `:10501`,
+cools 60s, then runs the same `RUNS` against LM Studio's local server (default
+`:1234`). Output is `benchmarks/lmstudio-compare-<ts>.md` with per-run + mean
+± stddev for both runtimes and a one-line "ours is X% faster/slower"
+conclusion. Pre/post `diagnose-variance.sh` snapshots wrap each arm. The
+script does NOT start or stop LM Studio — open the LM Studio app, click
+"Local Server", load a Qwen-family model, and start the server before running
+this. If LM Studio isn't reachable on the configured port the script aborts
+with a startup hint. Expected runtime: ~5–8 min wall (two RUNS×bench arms +
+60s cool-down). **Stop if you see** the model ids on the two servers diverge
+(`our='qwen3.6-…'`, `lmstudio='gemma-…'`) — the comparison isn't apples-to-
+apples; load the same Qwen GGUF in LM Studio and re-run.
+
 ### `scripts/test-battery-ac.sh` — battery vs AC sustained-load bench
 Runs `bench.py` `RUNS` times (default 3) on the current power source, prompts
 the user to flip the cable, refuses to continue if `pmset -g batt` doesn't

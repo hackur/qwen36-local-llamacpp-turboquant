@@ -388,14 +388,47 @@ export function createProxyServer({
     upstreamHeaders["content-type"] =
       upstreamHeaders["content-type"] || "application/json";
 
+    // Wire `upstream.request_timeout_ms` so a hung llama-server doesn't stall
+    // the proxy forever. AbortController is shared between the initial fetch
+    // and the streaming body iterator below — if the timer fires mid-stream
+    // we abort the iterator and emit a clean SSE terminator. Cleared on
+    // successful completion.
+    const requestTimeoutMs = config.upstream.request_timeout_ms;
+    const upstreamController = new AbortController();
+    let timedOut = false;
+    const upstreamTimer = setTimeout(() => {
+      timedOut = true;
+      upstreamController.abort();
+    }, requestTimeoutMs);
+
     let upstreamRes;
     try {
       upstreamRes = await fetch(`${upstreamUrl}/v1/chat/completions`, {
         method: "POST",
         headers: upstreamHeaders,
         body: outboundBuf,
+        signal: upstreamController.signal,
       });
     } catch (err) {
+      clearTimeout(upstreamTimer);
+      if (timedOut) {
+        logger.warn(
+          { requestId, timeoutMs: requestTimeoutMs },
+          "upstream timed out before response headers",
+        );
+        res.writeHead(504, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            error: {
+              message:
+                `upstream did not respond within ${requestTimeoutMs}ms ` +
+                `(upstream.request_timeout_ms)`,
+              type: "upstream_timeout",
+            },
+          }),
+        );
+        return;
+      }
       logger.error(
         { err: err.message, requestId },
         "upstream connection failed",
@@ -430,10 +463,25 @@ export function createProxyServer({
         }
       }
     } catch (err) {
-      logger.warn(
-        { err: err.message, requestId },
-        "upstream stream interrupted",
-      );
+      if (timedOut) {
+        logger.warn(
+          { requestId, timeoutMs: requestTimeoutMs },
+          "upstream stream timed out mid-response; emitting clean termination",
+        );
+        // Headers already flushed — best we can do is emit a clean SSE
+        // terminator so OpenAI-style clients exit their read loop. For
+        // non-streaming JSON, the partial body just ends.
+        if (isStreaming) {
+          try { res.write("data: [DONE]\n\n"); } catch { /* socket dead */ }
+        }
+      } else {
+        logger.warn(
+          { err: err.message, requestId },
+          "upstream stream interrupted",
+        );
+      }
+    } finally {
+      clearTimeout(upstreamTimer);
     }
     res.end();
 

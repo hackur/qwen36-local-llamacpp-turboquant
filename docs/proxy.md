@@ -127,7 +127,7 @@ With both servers up:
 
 ```bash
 # unit (no servers needed)
-cd proxy && npm test                       # 126 tests
+cd proxy && npm test                       # 129 tests
 
 # integration (needs llama-server :10501 + proxy :11500)
 bash proxy/tests/integration.sh

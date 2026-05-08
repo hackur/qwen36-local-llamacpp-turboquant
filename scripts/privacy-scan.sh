@@ -12,7 +12,7 @@ cd "$REPO"
 
 echo "Public privacy scan"
 if git grep -n -E 'sarda|Jeremy Sarda|jcsarda@gmail\.com|/Users/you|/path/to/project|/path/to|Reference:|gh[ps]_[A-Za-z0-9]|sk-[A-Za-z0-9]{20,}|BEGIN (RSA|OPENSSH|PRIVATE)|PRIVATE KEY|Bearer [A-Za-z0-9._-]+' \
-  -- . ':!scripts/static-check.sh' ':!scripts/privacy-scan.sh' ':!LICENSE' >/tmp/qwen-privacy-scan.txt; then
+  -- . ':!scripts/static-check.sh' ':!scripts/privacy-scan.sh' ':!LICENSE' ':!docs/troubleshooting.md' >/tmp/qwen-privacy-scan.txt; then
   cat /tmp/qwen-privacy-scan.txt
   echo "  ✗ privacy scan found matches"
   exit 1

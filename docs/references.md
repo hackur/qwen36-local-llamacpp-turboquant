@@ -26,5 +26,6 @@
 
 - [`lmstudio-community/Qwen3.6-35B-A3B-GGUF`](https://huggingface.co/lmstudio-community/Qwen3.6-35B-A3B-GGUF)
 - [`unsloth/Qwen3.6-27B-GGUF`](https://huggingface.co/unsloth/Qwen3.6-27B-GGUF)
+- [`unsloth/Qwen3.5-0.8B-GGUF`](https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF) — speculative-decoding draft / cold-start / battery mode (see [`docs/speculative-decoding.md`](speculative-decoding.md))
 
 Both are mirrored in `~/.lmstudio/models/`.

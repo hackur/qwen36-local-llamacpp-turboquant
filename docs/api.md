@@ -53,7 +53,7 @@ Add `"stream": true` to the body. Response is `text/event-stream` with `data: {.
 
 ### Long context with TurboQuant
 
-The server already started with `-c 65536` (or whatever you set via `CTX=`); just send a long prompt. Reported `n_ctx_train: 262144` is the model's training-time max — practical max depends on KV cache memory budget.
+The server already started with `-c 131072` (default in `start-turboquant.sh` — or whatever you set via `CTX=`); just send a long prompt. Reported `n_ctx_train: 262144` is the model's training-time max — practical max depends on KV cache memory budget.
 
 ### Tokenize before you send
 

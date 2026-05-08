@@ -29,6 +29,11 @@ See [`docs/offline-mode.md`](docs/offline-mode.md) for the full offline recipe.
 - **Quarterly LM Studio re-validation** — `scripts/quarterly-audit.sh` + `configs/launchd-quarterly.template` (Jan/Apr/Jul/Oct).
 - **Mixed K/V guard rail** (`apply_kv_split`, sentinel `mixed-kv-guard:v1`) and **opt-in `/metrics`** (`METRICS=1`, default off so generation counts don't leak to localhost).
 - **KV-cache math corrected by 4×** across `docs/{kv-cache-math,architecture,context-matrix}.md`; default model swapped to `qwen36-neo` (256K native, uncensored, code-tuned), `qwen36-35b` preserved as `MODEL_FALLBACK`.
+- **Summarizer bench run** — `nemotron-4b` recommended for the Phase 2 slot (near-tie with gemma4-e4b on quality, ~3× smaller VRAM). Recorded in `proxy/config.yaml` and `docs/compaction-strategy.md` §11.
+- **100K-needle long-context recall** — `qwen36-neo` turbo3 @131K recovered the password from a 72 546-token prompt at depth 50% (exact match). Smaller probes at 5K and 30K also recovered. See `benchmarks/RESULTS.md`.
+- **`scripts/bench-summarizer.sh` teardown fix** — the wrapper's `exec | tee` chain reparented `llama-server` away from `$!`, leaking transient servers and pushing the system to swap-fill. Now resolves the real PID via `lsof`.
+- **Watermark analyzer demo + interpretation guide** — `scripts/synthesize-telemetry.py` fabricates plausible JSONL so `scripts/analyze-watermarks.py` can be exercised end-to-end without a week of shadow-mode traffic. See [`docs/watermark-tuning.md`](docs/watermark-tuning.md).
+- **TurboQuant vs LM Studio runbook** — `scripts/compare-lmstudio.sh` walks through stopping the primary, booting LM Studio's runtime against the same GGUF, capturing tok/s, and restoring.
 
 Full details in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -165,15 +170,17 @@ Makefile              ergonomic wrappers
 Qwen-Offline.command  double-click launcher (Finder)
 scripts/              build, start-*, stop-all, status, bench, needle, demo, healthcheck, symlink,
                       sustained-load runbooks (sweep-ctx-batch, ablate-sparse-v, test-np-concurrency,
-                      test-spec-decode, bench-summarizer), quarterly-audit, analyze-watermarks,
-                      diagnose-variance, start-embed
+                      test-spec-decode, bench-summarizer), compare-lmstudio (TurboQuant vs LM Studio),
+                      quarterly-audit, analyze-watermarks, synthesize-telemetry, diagnose-variance,
+                      start-embed
 clients/              python-demo.py · web-demo.html
 configs/              opencode, continue, launchd plist, launchd-quarterly.template (Jan/Apr/Jul/Oct
                       LM Studio re-audit), sampling, model-defaults.env (per-alias CTX/KV/RoPE)
 proxy/                compaction reverse proxy on :11500 — tier-1 elision, summarizer hook,
                       session keying, structured notes, hooks-middleware engine — see docs/proxy.md
 docs/                 architecture, offline-mode, multimodal, troubleshooting, references,
-                      proxy, hooks-middleware, speculative-decoding, upstream-tracking, …
+                      proxy, hooks-middleware, speculative-decoding, upstream-tracking,
+                      watermark-tuning, …
 benchmarks/           RESULTS.md + raw run logs
 vendor/               llama.cpp-mainline + llama-cpp-turboquant (gitignored)
 models/               symlinks to LM Studio GGUFs

@@ -437,10 +437,23 @@ and `proxy/src/hooks/`.
 ## 11. Open questions
 
 - **Watermark tuning.** 70% is a guess. Real number lives in the data once
-  Phase 0 instrumentation runs for a week.
+  Phase 0 instrumentation runs for a week. See
+  [`watermark-tuning.md`](./watermark-tuning.md) for the analyzer's algorithm
+  and how to interpret its output.
 - **Summarizer model choice.** `gemma4-e4b` Q8_0 (better summaries, 8 GB) vs
   `nemotron-4b` (faster, 2.8 GB) vs `tiny` Q4 (essentially free, low quality).
   Bench all three with the decision-preservation eval.
+  *Bench result (task #42, `benchmarks/summarizer-bench-20260507-215050.md`):*
+  recommend **`nemotron-4b`** for the Phase 2 hook. Aggregate wall-clock was
+  marginally faster than `gemma4-e4b` (13.93s vs 14.16s mean), generation
+  throughput was ~30% higher (42.7 vs 33.0 tok/s), VRAM is ~3× smaller (~2.8 GB
+  vs ~8 GB), and quality is a near-tie on entity preservation, decision-marker
+  survival (D-17/D-18, task #88/#91), and unresolved-question capture across
+  all five fixtures. `gemma4-e4b` writes slightly more polished prose; not
+  worth 5 GB. `tiny` is unusable — it produced token-salad on every fixture
+  (no `Abort trap`, server stayed up, but output was garbage; suspected chat-
+  template mismatch on the q8_0-pinned build). Pin choice in `proxy/config.yaml`
+  once Phase 2 is wired through end-to-end.
 - **Run the summarizer on CPU?** Would free GPU for the primary. The 4B model
   on CPU should still hit 10–20 tok/s, fine for background work. Worth a probe.
 - **One proxy per port, or one shared proxy?** A single proxy on `:11500` that

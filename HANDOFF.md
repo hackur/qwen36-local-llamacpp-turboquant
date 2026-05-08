@@ -288,3 +288,77 @@ A 4× overstatement. The doc-reported "max 32K @ f16" was actually closer to **2
 - `docs/m5-readiness.md` confirms pre-M5 LUT path via existing dogfood logs and tags tensor-API items as wait-for-M5.
 - `docs/install-models.md` cosmetic skip-message wording fix.
 - `proxy/eval/ab-harness/` scaffold landed (no behaviour yet).
+
+---
+
+## Round 7 — proxy maturation, hooks engine, release prep
+
+The previous round finished with the proxy doing Tier-0/Tier-1 elision and the spec doc gesturing at a dozen unbuilt phases. This round pushed the proxy through Phases 2/3/4/5, ratified the hooks-middleware spec and built the engine behind it, populated the §11 battle-test table from a real A/B harness run, scaffolded the embeddings + summarizer benchmarking infrastructure, audited a thermal-throttle that the user keeps re-discovering, and tightened a handful of operational guard-rails before cutting v0.0.2.
+
+### A. Proxy Phase 2 — recursive summarizer hook
+
+`proxy/src/summarizer.js` plus a Phase 2 hook in `rewrite.js`, gated on `summarizer.url` being set with `mode: shadow|enforce`. Shadow counts what would be replaced; enforce actually replaces. Two design points worth flagging next time someone reads this code:
+
+1. **Shadow=count-only / enforce=replace.** Same shape as the top-level proxy modes, kept deliberately so the operator can stage rollout the same way.
+2. **Inline replacement vs persist+dual-link.** We chose inline replacement (the summary takes the slot) over persist-the-original-and-dual-link, because `expand_tool_result` rehydration is already the answer for "give me the full text back" — duplicating that path for prose summaries earns nothing but more state. 8 new unit tests.
+
+### B. Proxy Phase 3 — session keying
+
+`proxy/src/session.js`: `keyForRequest`, `extractStablePrefix`, a TTL-bounded session map, and slot save/restore stubs. Adds a `session:` config block. Stubs because `llama-server` slot save/restore wiring is upstream-dependent and we want the keying primitive landed first so Phase 4 hooks can attach to it. 5 new tests.
+
+### C. Proxy Phase 4/5 — structured notes + sumy fallback
+
+`proxy/src/notes.js` and a Tier-2/3/4 hook in `rewrite.js`. `notes:` and `sumy:` config sections. The full layering ladder is now: **Phase 2 summarizer → Phase 4 structured notes → Phase 5 sumy fallback → Tier 1 elision**, each one degrading gracefully into the next. 6 new tests.
+
+### D. Hooks-middleware spec — ratify, amend, build
+
+The v0.1 spec went through a review (#38, verdict "ratify with amendments") and then a full pass to apply all 16 amendments (#57): per-phase scratch fields, tags read-only, mutation visibility rules, `replace('messages')` writeback, mutate-collision semantics, `HookPhaseClosedError`, inject fallbacks, handler signature pinning, `predicate_module`, §6.5 Handler Resolution, `stream:context-trigger` semantics, §12 byte-identity caveat, §11 variant naming, metric aggregation, `x-rewrite-stats` note, naming convention.
+
+Then the engine itself (#39) — `proxy/src/hooks/{engine, registry, tag-bash-read-elisions, context-pressure-reminder, prose-summarize, once-per-session, session-hint-loader}.js`, wired into `server.js` at four request phases, gated behind a `NULL_HOOKS` sentinel + `hasHooksFor` early-out so a config without a `hooks:` block pays zero per-request cost. `hooks: {enabled, default_timeout_ms, handlers[]}` config. 15 new tests. **MVP scope deviations to remember:** `stream:*` and `response:*` phases are registered but don't fire yet; `HookPhaseClosedError` isn't enforced at runtime; the filter DSL is partial.
+
+### E. A/B harness fixtures + battle-test table populated
+
+`proxy/eval/ab-harness/` got 5 fixtures (~180 KB), `runner.py` extended with a subprocess shim, `aggregate.py` emitting the §11 metric shape, and `proxy/scripts/run-rewrite.js` as the Node CLI shim. Smoke run: 30 cells, 2.1 s, 0 errors, 100% needle + decision preservation; tier0+tier1 was −49.9% on tool-heavy fixtures. The §11 battle-test table in `docs/hooks-middleware.md` is now real numbers, not placeholders.
+
+### F. Embeddings + summarizer benchmarking
+
+- `scripts/start-embed.sh` (sentinel `embed-server:v1`, port 10510, KV f16, `--embedding`) + Makefile target + `docs/api.md` updated. Scaffolded; user picks the embedding model.
+- `scripts/bench-summarizer.sh` runs gemma4-e4b vs nemotron-4b vs tiny on 5 inline fixtures using transient ports 10520-22, captures load/prefill/gen tps + summary text, writes `benchmarks/summarizer-bench-<ts>.md`. Decision is the user's; the script just collects the data.
+
+### G. Diagnostics + analyzers
+
+- `scripts/analyze-watermarks.py` (stdlib) reads `~/.cache/qwen-compact/logs/*.jsonl` and reports trigger rate, FPR, and lead time per candidate watermark, with a recommendation to minimise FPR using lead-time as tiebreak. `--csv` flag, Makefile target.
+- `scripts/diagnose-variance.sh` snapshotter for the #49 investigation. The neo gen-tok/s variance band turned out to be specific to **128K + 500-tok gen**, and the surviving hypothesis is GPU residency-set / KV eviction churn at 128K — 256K saturates so eviction can't happen, which neatly explains why the asymmetry exists. The script later picked up a follow-up patch wrapping `pmset -g thermlog` in a 2 s `timeout` because it occasionally hung.
+
+### H. Operational guard-rails
+
+- **Mixed K/V guard rail.** `apply_kv_split` helper in `_common.sh` enforces the `KV_K`/`KV_V` env contract, `MIXED_KV_OK=1` silences the warning, sentinel `mixed-kv-guard:v1`. Wired into `start-turboquant.sh` and `start-vision.sh`. (SWEEP.md has been screaming about mixed K/V being slow for two rounds now; this finally puts a hand on the user's shoulder before they boot something dumb.)
+- **`--metrics` is opt-in.** `METRICS=1` env in `start-turboquant.sh`, sentinel `metrics-opt-in:v1`. Default is off — `/metrics` was leaking generation counts to anything with localhost access.
+- **Quarterly LM Studio re-validation.** `scripts/quarterly-audit.sh`, `configs/launchd-quarterly.template` firing Jan/Apr/Jul/Oct 09:00 local, Makefile target, subsection in `docs/offline-mode.md`. The risk is LM Studio silently re-introducing a phone-home in a future update; we want a calendar reminder, not vigilance.
+- **Upstream tracking doc.** `docs/upstream-tracking.md` pins TurboQuant at `11a241d` (2026-04-24) and mainline at `683c5acb9` (2026-04-29), records the q8_0 pins for tiny + gpt-oss-20b, and gives a quarterly recheck recipe. Cross-referenced from `configs/model-defaults.env`.
+
+### I. Live verification
+
+- **Thermal-throttle reproduction.** Three back-to-back A/B runs on the turboquant primary collapsed gen tok/s **13.92 → 7.69 → 4.11** (-45 % run 2, −70 % run 3). Recorded in `benchmarks/RESULTS.md` (2026-05-07 entry). The A/B against baseline f16 is deferred until we have a cool chassis, because there's no point measuring the proxy overhead while the SoC is ramping its own clocks down.
+- **Quality-check on turboquant primary.** All 5 prompts correct (1099 math, list-comp, Macbeth, JSON, Mongolia capital).
+- **`make audit-offline` on primary.** Zero non-localhost sockets, still.
+- **Vision e2e.** `qwen36-neo` + mmproj on `:10503`, base64 PNG → coherent reply in 2.8 s. The Round 6 deferred vision e2e is now done.
+- **Editor configs.** `continue.json` and `opencode.json` re-confirmed; the stale "35B-A3B" label in opencode's display name was dropped.
+- **Web demo + python demo.** Both still talk to the live primary.
+
+### J. Regression coverage
+
+`sniffUsage` regression test, tool-calling coverage, `expand_tool_result` compaction validation — 6 new proxy tests covering paths the v0.0.1 → Unreleased work had been touching without nets.
+
+### K. Stale 35B-A3B references
+
+`architecture.md` and `context-matrix.md` still carried the old 35B-A3B baselines as if they were primary. Updated to lead with `qwen36-neo`, with the 35B-A3B preserved as fallback context. (Pairs with the kv-cache-math correction from Round 6.)
+
+### L. Two small bugs
+
+- `start-turboquant.sh` had a bash 3.2 empty-array failure in `ROPE_FLAGS` handling on the spin-restart path (sibling of the Round 6 launchd-killing bug, different code site).
+- `diagnose-variance.sh` would hang on `pmset -g thermlog`; wrapped in a 2 s `timeout`.
+
+### M. v0.0.2 release prep
+
+`CHANGELOG.md` rotated — Unreleased → `v0.0.2 — 2026-05-07`, with the Round 7 work folded in alongside the prior Round 4–6 entries that were already staged. No tag pushed yet.

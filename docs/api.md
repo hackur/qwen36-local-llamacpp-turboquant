@@ -1,6 +1,6 @@
 # API surface — what works against this server
 
-Tested against `vendor/llama-cpp-turboquant/build/bin/llama-server` on `127.0.0.1:10501` with Qwen3.6-35B-A3B Q6_K loaded.
+Tested against `vendor/llama-cpp-turboquant/build/bin/llama-server` on `127.0.0.1:10501` with both `qwen36-neo` (primary, Qwen3.6-27B Heretic NEO-CODE Q5_K_M) and `qwen36-35b` (fallback, Qwen3.6-35B-A3B Q6_K) loaded at various points.
 
 | Endpoint | Method | Status | Use |
 |---|---|---|---|

@@ -30,6 +30,7 @@ matching what `huggingface-cli download` lays out by default):
 | `gemma4-e4b` | `lmstudio-community/gemma-4-E4B-it-GGUF/gemma-4-E4B-it-Q8_0.gguf` (+ `mmproj-gemma-4-E4B-it-BF16.gguf`) |
 | `gpt-oss-20b` | `lmstudio-community/gpt-oss-20b-GGUF/gpt-oss-20b-MXFP4.gguf` |
 | `qwen35-9b` | `lmstudio-community/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q8_0.gguf` (+ `mmproj-Qwen3.5-9B-BF16.gguf`) |
+| `qwen3.5-0.8b` | `unsloth/Qwen3.5-0.8B-GGUF/Qwen3.5-0.8B-Q8_0.gguf` (no mmproj, ~775 MB) |
 | `crow-9b` | `mradermacher/Crow-9B-Opus-4.6-Distill-Heretic_Qwen3.5-GGUF/Crow-9B-Opus-4.6-Distill-Heretic_Qwen3.5.Q4_K_S.gguf` (+ `Crow-9B-Opus-4.6-Distill-Heretic_Qwen3.5.mmproj-f16.gguf`) |
 | `nemotron-4b` | `lmstudio-community/NVIDIA-Nemotron-3-Nano-4B-GGUF/NVIDIA-Nemotron-3-Nano-4B-Q4_K_M.gguf` |
 | `tiny` | `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf` |

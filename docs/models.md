@@ -23,6 +23,7 @@ Or use a per-model Make target — these come with sensible defaults for KV cach
 | `make start-gemma4-e4b` | `gemma4-e4b` | Gemma 4 E4B Q8_0, 16K |
 | `make start-nemotron` | `nemotron-4b` | NVIDIA Nemotron-3 4B, 8K |
 | `make start-tiny` | `tiny` | TinyLlama 1.1B, 2K, **q8_0 KV** (turbo3 unsupported) |
+| `make start-qwen3.5-0.8b` | `qwen3.5-0.8b` | Qwen 3.5 0.8B Q8_0, speculative-decoding draft / cold-start / battery mode |
 
 ## Full inventory
 
@@ -38,6 +39,7 @@ Or use a per-model Make target — these come with sensible defaults for KV cach
 | `crow-9b` | Crow 9B (Qwen3.5 distill) | dense | Q4_K_S | 5.3 GB | ✓ | ✓ |
 | `nemotron-4b` | NVIDIA Nemotron-3 4B | dense | Q4_K_M | 2.8 GB | — | ✓ |
 | `tiny` | TinyLlama 1.1B | dense | Q4_K_M | 0.7 GB | — | **✗ — use q8_0** |
+| `qwen3.5-0.8b` | Qwen 3.5 0.8B | dense | Q8_0 | 0.78 GB | — | ✓ |
 
 ✓ in the turbo3 column means we verified the kernel loads and generates without error on M3 Max. The "✗" entries crash with `Abort trap: 6` during `graph_reserve` — turbo3's kernel doesn't yet support those head dims / quantization combinations, so the Make targets pin them to `KV=q8_0`.
 
@@ -54,8 +56,9 @@ Or use a per-model Make target — these come with sensible defaults for KV cach
 | gemma4-e4b | turbo3 | 51.1 |
 | nemotron-4b | turbo3 | 98.0 |
 | tiny | q8_0 | 272 |
+| qwen3.5-0.8b | turbo3 | — (draft / cold-start) |
 
-## Why 35B-A3B over 27B dense
+## Why we kept 35B-A3B as fallback after swapping to qwen36-neo
 
 35B-A3B is a Mixture-of-Experts model with **35 B total parameters but only ~3 B active per token**. On M3 Max:
 

@@ -3,9 +3,9 @@
 Two parallel inference paths against the same GGUF on disk, fronted by an OpenAI-compatible HTTP server. A/B-bench them, route real traffic to the winner.
 
 ```
-                                   ┌─ ~/.lmstudio/models/.../Qwen3.6-35B-A3B-Q6_K.gguf  (28.5 GB, MoE 35B/3B-active)
-        GGUF on disk  ─────────────┤
-                                   └─ mmproj-Qwen3.6-35B-A3B-BF16.gguf                  (vision projector, optional)
+                                   ┌─ ~/.lmstudio/models/.../Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M.gguf (19.5 GB, dense 27B — primary)
+        GGUF on disk  ─────────────┤  ~/.lmstudio/models/.../Qwen3.6-35B-A3B-Q6_K.gguf                    (28.5 GB, MoE 35B/3B-active — fallback)
+                                   └─ mmproj-*.gguf                                                       (vision projector, optional)
 
                                    ┌─ vendor/llama.cpp-mainline (master)        ── Metal, f16 KV     ─ port 10500  baseline
         Inference engine  ─────────┤

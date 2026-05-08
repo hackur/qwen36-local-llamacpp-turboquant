@@ -24,6 +24,7 @@ Decide by **memory budget** first, **task** second.
 | 32 GB RAM | `qwen35-9b`, `gemma4-e4b`, `crow-9b` |
 | 16 GB RAM | `nemotron-4b` |
 | Battery life mode / quick smoke test | `tiny` |
+| Speculative-decoding draft / cold-start / battery mode | `qwen3.5-0.8b` |
 | Vision (images) on a heavy model | `qwen36-neo`, `qwen36-35b`, or `gemma4-26b` |
 | Vision on a small model | `qwen35-9b` (best quality) or `gemma4-e4b` |
 
@@ -364,7 +365,7 @@ curl -s http://127.0.0.1:10501/v1/chat/completions \
   | jq -r '.choices[0].message.content'
 ```
 
-For prompts above ~50 K tokens, `qwen36-neo` (256K trained, default) and `qwen36-35b` (128K trained, fallback) are the only models with the trained context. For 8K–32K, any model works.
+For prompts above ~50 K tokens, `qwen36-neo` (256K trained, default) and `qwen36-35b` (256K trained, fallback) are the only models with the trained context. For 8K–32K, any model works.
 
 **Verify it actually used the long context:**
 ```bash

@@ -10,7 +10,22 @@ is high, the target produces several tokens per forward — its
 memory-bandwidth cost amortizes across them — without changing what the
 target itself would have generated.
 
-## Acquiring a Qwen3-0.6B GGUF (offline-first; do NOT auto-download)
+## Built-in draft alias
+
+The simplest path: use the `qwen3.5-0.8b` alias that ships with the repo (Qwen
+3.5 0.8B Q8_0, ~775 MB, same Qwen3 tokenizer family as `qwen36-neo` /
+`qwen36-35b`). After `./scripts/symlink-models.sh` picks it up, point the
+harness at it via `models/draft.gguf`:
+
+```bash
+ln -sf "$HOME/.lmstudio/models/unsloth/Qwen3.5-0.8B-GGUF/Qwen3.5-0.8B-Q8_0.gguf" \
+       models/draft.gguf
+DRAFT=models/draft.gguf ./scripts/test-spec-decode.sh
+# or pass the alias directly:
+DRAFT=qwen3.5-0.8b ./scripts/test-spec-decode.sh
+```
+
+## Alternative drafts — acquiring a Qwen3-0.6B GGUF (offline-first; do NOT auto-download)
 
 This repo is offline-first by design. To add a draft model:
 

@@ -1,7 +1,7 @@
 # Compaction Strategy for Local Agentic Sessions
 
 A research-backed plan for keeping long-running coding-agent sessions coherent on
-this stack — **Qwen 3.6-35B-A3B (or alternates) on llama.cpp + TurboQuant, M3 Max
+this stack — **Qwen 3.6 27B Heretic NEO-CODE (qwen36-neo, primary; Qwen 3.6-35B-A3B as fallback) on llama.cpp + TurboQuant, M3 Max
 64 GB, fully offline-capable** — without requiring the agent harness (OpenClaw,
 Continue, OpenCode, Zed, etc.) to know that compaction is happening.
 
@@ -392,7 +392,9 @@ sessions because tool outputs dominate. This alone justifies the proxy.
 tool-call index. Build the replay harness in parallel.
 
 **Phase 3 — KV cooperation (2–3 days).** Stable-prefix discipline, slot save on
-idle, session keying. Measure prefill latency before/after.
+idle, session keying. Measure prefill latency before/after. **Status:
+instrumented (off by default).** Session keying + stable-prefix in
+`proxy/src/session.js`; `slot_endpoint_base` stubbed.
 
 **Phase 4 — structured notes + tool pruning (optional).** Phantom
 `note_write`/`note_read`. Tool pruning with `always_keep` list. Skip if Phase
@@ -406,6 +408,11 @@ as the Tier-3 fallback when the summarizer is offline. **Status: implemented
 (off by default).** Implemented in JS in `proxy/src/notes.js` — no Python sumy
 package, no new npm deps. Gated behind `sumy.enabled`. Fires only when notes
 extraction yields nothing on an oversized body.
+
+**Phase 6 — hooks middleware.** Pluggable per-message hook engine for
+rewrite-side experiments (additional tiers, A/B variants, custom transforms)
+without forking the core pipeline. See [`docs/hooks-middleware.md`](hooks-middleware.md)
+and `proxy/src/hooks/`.
 
 ---
 

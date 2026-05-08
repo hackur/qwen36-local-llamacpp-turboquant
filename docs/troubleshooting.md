@@ -61,7 +61,7 @@ Run `scripts/quality-check.sh` and diff outputs. turbo3 trades some bits for con
 ## Compaction proxy (:11500)
 
 ### Client gets `ECONNREFUSED` from `:11500`
-The proxy is a separate Node/Fastify process — `scripts/start-turboquant.sh` does **not** launch it. Start it explicitly: `cd proxy && npm start` (or `make proxy`). The proxy in turn forwards to llama-server on `:10501`, so both must be up.
+The proxy is a separate Node/Fastify process — `scripts/start-turboquant.sh` does **not** launch it. Start it explicitly: `cd proxy && npm start` (or `make proxy-start`). The proxy in turn forwards to llama-server on `:10501`, so both must be up.
 
 ### `completion_tokens: null` in proxy JSONL logs
 **Fixed** in `b9bb6f1` (`fix(proxy): brace-balance sniffUsage so completion_tokens is logged`). The old regex `\{[^}]*\}` bailed at the first inner `}`, so any `usage` block with a nested `prompt_tokens_details` (i.e. every real llama-server response) logged `completion_tokens` as `null`. If you're on an older proxy build and seeing this, pull and restart — covered by `proxy/tests/sniff-usage.test.js`.
@@ -144,6 +144,18 @@ if you see** aggregate gen tok/s well below single-slot (KV-cache pressure
 forcing OOM-adjacent paging — Activity Monitor will show swap climbing), or
 either client erroring with HTTP 503 / slot-busy (the server is oversubscribed
 for this hardware).
+
+### `scripts/test-spec-decode.sh` — speculative-decoding harness
+Boots the target alias (default `qwen36-neo`) on `:10596` with `--model-draft`
+pointing at a Qwen3-family draft GGUF (`DRAFT=models/draft.gguf` or an alias
+like `qwen3.5-0.8b`), runs `bench.py` once, and writes a `spec-decode-<ts>.md`
+report with acceptance rate, gen tok/s, and a comparison against the no-draft
+baseline in `benchmarks/RESULTS.md`. Pre/post `diagnose-variance.sh` snapshots
+wrap the run and the harness refuses to start if the binary lacks
+`--model-draft`. Expected runtime: ~3–5 min wall. **Stop if you see** acceptance
+rate below ~30% (tokenizer mismatch — see `docs/speculative-decoding.md`
+pitfalls), or gen tok/s *below* the no-draft baseline (verifier overhead is
+exceeding the savings — try a smaller `DRAFT_TOKENS` or a different draft).
 
 ### `scripts/test-battery-ac.sh` — battery vs AC sustained-load bench
 Runs `bench.py` `RUNS` times (default 3) on the current power source, prompts

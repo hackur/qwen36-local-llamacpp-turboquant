@@ -41,10 +41,15 @@ fi
 resolve_model "$MODEL_INPUT"
 MODEL="$RESOLVED_MODEL"
 ensure_model "$MODEL"
+load_model_defaults "$MODEL_INPUT"
 ensure_port_free "$PORT"
 mkdir -p "$REPO/logs"
 
-echo "▶ embed @ http://127.0.0.1:$PORT  (--embedding, ${KV} KV, ${CTX} ctx)"
+# mixed-kv-guard:v1 — derive KV_K / KV_V from KV (unless overridden) and warn on mismatch.
+apply_kv_split
+
+KV_DESC="$KV_K"; [[ "$KV_K" != "$KV_V" ]] && KV_DESC="${KV_K}/${KV_V}"
+echo "▶ embed @ http://127.0.0.1:$PORT  (--embedding, ${KV_DESC} KV, ${CTX} ctx)"
 echo "  model → $MODEL"
 echo "  log   → $LOG"
 
@@ -55,7 +60,7 @@ exec "$BIN" \
   --port "$PORT" \
   --host 127.0.0.1 \
   -c "$CTX" \
-  -ctk "$KV" -ctv "$KV" \
+  -ctk "$KV_K" -ctv "$KV_V" \
   -ngl 99 -fa on -np 1 \
   --embedding \
   --alias embed \

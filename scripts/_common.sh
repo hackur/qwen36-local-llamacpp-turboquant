@@ -130,6 +130,55 @@ apply_kv_split() {
   fi
 }
 
+# memory-preflight:v1 — abort if model + optional mmproj + KV/scratch + other
+# already-running llama-server RSS + 4 GiB headroom would exceed physical RAM.
+# Originally inline in start-vision.sh; lifted here so big text-only aliases
+# (e.g. qwen36-35b at 256K) can opt in via MEMORY_PREFLIGHT=1.
+# Usage: preflight_memory <model_path> [mmproj_path]
+# Override with FORCE=1.
+preflight_memory() {
+  local model="$1" mmproj="${2:-}"
+  local model_bytes mmproj_bytes total_bytes
+  model_bytes=$(stat -f%z "$model" 2>/dev/null || echo 0)
+  if [[ -n "$mmproj" && -f "$mmproj" ]]; then
+    mmproj_bytes=$(stat -f%z "$mmproj" 2>/dev/null || echo 0)
+  else
+    mmproj_bytes=0
+  fi
+  total_bytes=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
+  if [[ "$total_bytes" -le 0 ]]; then return 0; fi  # unknown — skip
+  local kv_scratch_bytes=$((1536 * 1024 * 1024))    # ~1.5 GiB KV/scratch margin
+  local headroom_bytes=$((4096 * 1024 * 1024))      # 4 GiB OS headroom
+
+  # Sum RSS (KiB on macOS) of other already-running llama-server processes.
+  local other_rss_kib=0 pid rss self_pid=$$
+  while read -r pid _; do
+    [[ -z "$pid" || "$pid" == "$self_pid" ]] && continue
+    rss=$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ')
+    [[ -n "$rss" ]] && other_rss_kib=$((other_rss_kib + rss))
+  done < <(pgrep -lf llama-server 2>/dev/null || true)
+  local other_rss_bytes=$((other_rss_kib * 1024))
+
+  local need_bytes=$((model_bytes + mmproj_bytes + kv_scratch_bytes + other_rss_bytes + headroom_bytes))
+  local gib=$((1024 * 1024 * 1024))
+  local need_gib=$((need_bytes / gib))
+  local total_gib=$((total_bytes / gib))
+  local free_gib=$(((total_bytes - other_rss_bytes) / gib))
+
+  if [[ "$need_bytes" -gt "$total_bytes" ]]; then
+    local desc="'$(basename "$model")'"
+    [[ "$mmproj_bytes" -gt 0 ]] && desc="$desc + mmproj"
+    echo "⚠️  Memory pre-flight: $desc needs ~${need_gib} GiB" >&2
+    echo "    (model $((model_bytes/gib)) GiB + mmproj $((mmproj_bytes/gib)) GiB + 1.5 GiB KV + $((other_rss_bytes/gib)) GiB other llama-server RSS + 4 GiB headroom)" >&2
+    echo "    System has ${total_gib} GiB physical, ~${free_gib} GiB available after other servers." >&2
+    if [[ "${FORCE:-0}" != "1" ]]; then
+      echo "    Refusing to start. Set FORCE=1 to override, or stop the other llama-server first." >&2
+      exit 1
+    fi
+    echo "    FORCE=1 set — proceeding anyway." >&2
+  fi
+}
+
 # rope_args — emit llama-server flags for YaRN scaling, or nothing.
 #   Reads ROPE_SCALING, ROPE_SCALE, YARN_ORIG_CTX from the environment.
 #   Use:  ROPE_FLAGS=( $(rope_args) )  ;  ${BIN} ... "${ROPE_FLAGS[@]}"

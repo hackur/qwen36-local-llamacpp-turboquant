@@ -568,6 +568,9 @@ M3 Max throttles ~30 % on battery for sustained GPU loads. For long benchmarks o
 ### Mixing K and V cache types is a trap
 We benched it: `f16/turbo3` and `turbo3/f16` ran 50 % slower than either pure config. Always set `-ctk` and `-ctv` to the same value (which all our scripts do).
 
+### Speculative decoding for long generations
+Pair the target with a small Qwen3-0.6B draft model to amortize memory bandwidth on long, low-entropy decodes. See [`docs/speculative-decoding.md`](speculative-decoding.md).
+
 ### Cold start is dominated by mmap warmup
 First load after reboot reads the GGUF off SSD (fastest path is ~3 GB/s on M3 Max). For a 28 GB model that's ~10 s of paging. Subsequent restarts reuse the OS file cache — `make stop && make start` is then ~3 s.
 

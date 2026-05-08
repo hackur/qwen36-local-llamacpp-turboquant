@@ -100,6 +100,51 @@ Even when told "JSON only", Qwen and Gemma wrap output in ```` ```json ```` fenc
 
 See [`docs/usage.md`](usage.md#json--structured-output).
 
+## Sustained-load runs
+
+These three scripts each launch a *transient* llama-server on a non-primary
+port (10597–10599), run a measurement, and tear down. They explicitly do not
+touch the launchd-managed primary on `:10501`. All three hit the GPU hard
+enough that thermal throttling becomes a real risk on M3 Max — the
+`benchmarks/RESULTS.md` 2026-05-07 entry shows a 70% gen-tok/s decay across
+three back-to-back 500-token runs on a hot chassis. Run these one at a time,
+let the box cool between attempts, and stop early if any of the warnings
+below show up.
+
+### `scripts/sweep-ctx-batch.sh` — CTX × batch-size sweep
+Sweeps a 4 × 4 grid of `-c` (32K / 64K / 128K / 256K) and `-b` (512 / 1024 /
+2048 / 4096), launching a fresh server per cell, running `bench.py` once,
+appending a Markdown row to `benchmarks/sweep-<ts>.md` as each cell finishes
+(so a kill leaves partial results). Expected runtime: ~25–35 min wall with
+the default 60s cool-down between cells (~16 cells × ~60–90s bench + 60s
+sleep). Pre/post `diagnose-variance.sh` snapshots wrap the whole run. **Stop
+if you see** sustained `pmset -g therm` warnings, fan ramp that does not
+relax during cool-downs, or `ggml_metal: failed to allocate buffer` (drop
+the high CTX cells).
+
+### `scripts/ablate-sparse-v.sh` — `TURBO_SPARSE_V=0` ablation
+Boots `qwen36-35b` (override with `MODEL=…`) twice on `:10598`: first with
+`TURBO_SPARSE_V=1` (default), then with `TURBO_SPARSE_V=0`, three bench
+runs each plus one free-form sample per arm for eyeballing quality.
+Expected runtime: ~5–8 min wall including the cool-down between arms.
+Output is `benchmarks/sparse-v-ablation-<ts>.md` with side-by-side speed
+and a `Quality observation` section the user fills in after diffing the
+two captured samples. **Stop if you see** the second arm starting >10°C
+hotter than the first (cool-down was insufficient — the speed delta will be
+heat, not the kernel toggle), or either arm failing health-wait (likely
+`Abort trap: 6` — check the per-arm log).
+
+### `scripts/test-np-concurrency.sh` — `-np 2` concurrency test
+Re-launches the primary alias on `:10597` with `-np 2` and fires two
+parallel `bench.py` clients at it, then reports per-slot and aggregate gen
+tok/s. Compare aggregate against the single-slot numbers in
+`benchmarks/RESULTS.md` to tell real parallelism from latency-hiding.
+Expected runtime: ~3–5 min wall (two benches running concurrently). **Stop
+if you see** aggregate gen tok/s well below single-slot (KV-cache pressure
+forcing OOM-adjacent paging — Activity Monitor will show swap climbing), or
+either client erroring with HTTP 503 / slot-busy (the server is oversubscribed
+for this hardware).
+
 ## macOS gotchas
 
 ### `rotate-logs.sh` errors with `File: unbound variable`

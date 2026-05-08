@@ -17,6 +17,21 @@ One socket. Localhost. No outbound. **Wi-Fi off → no impact.**
 
 See [`docs/offline-mode.md`](docs/offline-mode.md) for the full offline recipe.
 
+## What's new in v0.0.2
+
+- **Compaction reverse proxy** at `proxy/` (`:11500` → `:10501`) shipped through Phases 2–5: Tier-1 elision, recursive summarizer hook, session keying, structured notes + sumy fallback. See [`docs/proxy.md`](docs/proxy.md).
+- **Hooks-middleware v0.2 spec ratified** + MVP engine with 5 built-in handlers wired at four request phases (zero per-request cost when `hooks:` absent). See [`docs/hooks-middleware.md`](docs/hooks-middleware.md) §11.
+- **A/B battle-test results populated** — 5 fixtures, 30 cells, 0 errors, 100% needle + decision preservation, tier0+tier1 −49.9% on tool-heavy fixtures.
+- **Sustained-load runbook scripts** — `scripts/{sweep-ctx-batch,ablate-sparse-v,test-np-concurrency,test-spec-decode,bench-summarizer}.sh`, all collision-safe against the launchd primary.
+- **`qwen3.5-0.8b` draft alias** (~775 MB Q8_0) — standalone tiny target plus speculative-decoding draft for the Qwen3.5/3.6 family. See [`docs/speculative-decoding.md`](docs/speculative-decoding.md).
+- **Embeddings server scaffold** — `scripts/start-embed.sh` on `:10510` (KV f16, `--embedding`). See [`docs/api.md`](docs/api.md).
+- **Upstream tracking** — `docs/upstream-tracking.md` pins TurboQuant + mainline SHAs and q8_0 model pins, with a quarterly recheck recipe.
+- **Quarterly LM Studio re-validation** — `scripts/quarterly-audit.sh` + `configs/launchd-quarterly.template` (Jan/Apr/Jul/Oct).
+- **Mixed K/V guard rail** (`apply_kv_split`, sentinel `mixed-kv-guard:v1`) and **opt-in `/metrics`** (`METRICS=1`, default off so generation counts don't leak to localhost).
+- **KV-cache math corrected by 4×** across `docs/{kv-cache-math,architecture,context-matrix}.md`; default model swapped to `qwen36-neo` (256K native, uncensored, code-tuned), `qwen36-35b` preserved as `MODEL_FALLBACK`.
+
+Full details in [`CHANGELOG.md`](CHANGELOG.md).
+
 ## Real numbers — Qwen3.6-27B-Heretic-NEO-CODE Q5_K_M on M3 Max 64GB
 
 | Profile | KV cache | Context | Gen tok/s | Prompt tok/s | Notes |
@@ -54,6 +69,7 @@ Or double-click **`Qwen-Offline.command`** in Finder — starts the server and p
 | Ask about an image | `make stop && MODEL=qwen36-neo PORT=10503 ./scripts/start-vision.sh &` | [`docs/multimodal.md`](docs/multimodal.md) |
 | Strict JSON output | `response_format: {"type":"json_schema", ...}` | [`docs/usage.md`](docs/usage.md#json--structured-output) |
 | Switch model on the fly | `make stop && make start-gemma4-26b` | [`docs/usage.md`](docs/usage.md#switching-models-live-stop-and-swap) |
+| Tiny Qwen-family model / speculative-decoding draft | `qwen3.5-0.8b` alias (~775 MB Q8_0, shared tokenizer with Qwen3.5/3.6) | [`docs/speculative-decoding.md`](docs/speculative-decoding.md) |
 | Streaming tokens (curl/python/JS) | three working examples | [`docs/usage.md`](docs/usage.md#streaming-chat--three-languages) |
 | Context compaction for long agentic sessions | transparent proxy on `:11500` in front of `:10501` (tool calling + SSE preserved) | [`docs/proxy.md`](docs/proxy.md) |
 | See live status / memory / network | `make info` or `make info-watch` | scripts/info.sh |
@@ -147,15 +163,30 @@ README.md             this file
 PLAN.md               original 41-task implementation plan
 Makefile              ergonomic wrappers
 Qwen-Offline.command  double-click launcher (Finder)
-scripts/              build, start-*, stop-all, status, bench, needle, demo, healthcheck, symlink
+scripts/              build, start-*, stop-all, status, bench, needle, demo, healthcheck, symlink,
+                      sustained-load runbooks (sweep-ctx-batch, ablate-sparse-v, test-np-concurrency,
+                      test-spec-decode, bench-summarizer), quarterly-audit, analyze-watermarks,
+                      diagnose-variance, start-embed
 clients/              python-demo.py · web-demo.html
-configs/              opencode, continue, launchd plist, sampling, model-defaults.env (per-alias CTX/KV/RoPE)
-docs/                 architecture, offline-mode, multimodal, troubleshooting, references, …
+configs/              opencode, continue, launchd plist, launchd-quarterly.template (Jan/Apr/Jul/Oct
+                      LM Studio re-audit), sampling, model-defaults.env (per-alias CTX/KV/RoPE)
+proxy/                compaction reverse proxy on :11500 — tier-1 elision, summarizer hook,
+                      session keying, structured notes, hooks-middleware engine — see docs/proxy.md
+docs/                 architecture, offline-mode, multimodal, troubleshooting, references,
+                      proxy, hooks-middleware, speculative-decoding, upstream-tracking, …
 benchmarks/           RESULTS.md + raw run logs
 vendor/               llama.cpp-mainline + llama-cpp-turboquant (gitignored)
 models/               symlinks to LM Studio GGUFs
 logs/                 runtime logs (gitignored)
 ```
+
+## Further reading
+
+- [`docs/proxy.md`](docs/proxy.md) — compaction reverse proxy operator guide.
+- [`docs/hooks-middleware.md`](docs/hooks-middleware.md) — v0.2 spec + §11 battle-test results.
+- [`docs/speculative-decoding.md`](docs/speculative-decoding.md) — when it helps, draft acquisition, tokenizer-mismatch pitfall.
+- [`docs/upstream-tracking.md`](docs/upstream-tracking.md) — pinned TurboQuant + mainline SHAs and quarterly recheck recipe.
+- [`docs/api.md`](docs/api.md) — embeddings server (`:10510`) and the rest of the HTTP surface.
 
 You can skip LM Studio if you already have GGUFs somewhere else:
 

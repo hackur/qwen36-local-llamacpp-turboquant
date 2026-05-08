@@ -64,6 +64,13 @@ METRIC_KEYS = (
     "decision_preservation",
     "turns_completed",
     "error",
+    # Hook telemetry. Populated when the variant runs through the hook engine
+    # (currently `tier1+hooks`). For variants without the engine these are
+    # None — aggregate.py treats missing values as zero / empty.
+    "hook_tags",
+    "hook_timings_ms",
+    "hook_errors",
+    "total_hook_time_ms",
 )
 
 
@@ -178,6 +185,10 @@ def run_one(variant: _variants.Variant, fixture: str, seed: int) -> dict[str, An
         "decision_preservation": _grade_decisions(text_out, original_text) if not err else 0.0,
         "turns_completed": int(shim.get("turns_completed", 0) or 0),
         "error": err or shim.get("error"),
+        "hook_tags": shim.get("hook_tags"),
+        "hook_timings_ms": shim.get("hook_timings_ms"),
+        "hook_errors": shim.get("hook_errors"),
+        "total_hook_time_ms": shim.get("total_hook_time_ms"),
     }
 
 

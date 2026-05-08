@@ -61,6 +61,10 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
     rewr_t = [float(r.get("rewritten_tokens", 0)) for r in rows]
     errors = [1.0 if r.get("error") else 0.0 for r in rows]
     decisions = [float(r.get("decision_preservation", 0)) for r in rows]
+    hook_times = [float(r.get("total_hook_time_ms") or 0) for r in rows]
+    hook_err_rows = [
+        1.0 if (r.get("hook_errors") or []) else 0.0 for r in rows
+    ]
 
     orig_sum = sum(orig_t)
     rewr_sum = sum(rewr_t)
@@ -73,11 +77,13 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "token_reduction_pct": token_red,
         "latency_p50_ms": _percentile(lat, 50),
         "latency_p99_ms": _percentile(lat, 99),
-        # Hook timings would come from per-record JSONL fields once #39 lands.
-        # Until then we surface 0 to keep the schema stable.
-        "total_hook_time_p50_ms": 0.0,
-        "total_hook_time_p99_ms": 0.0,
-        "hook_error_rate": sum(errors) / len(errors),
+        # Hook timings populated when the shim runs through the hook engine
+        # (variants with `hooks: true` in run-rewrite.js). Variants without
+        # the engine surface 0.
+        "total_hook_time_p50_ms": _percentile(hook_times, 50),
+        "total_hook_time_p99_ms": _percentile(hook_times, 99),
+        "hook_error_rate": sum(hook_err_rows) / len(hook_err_rows),
+        "shim_error_rate": sum(errors) / len(errors),
         "hook_timeout_rate": 0.0,
     }
 
@@ -152,17 +158,15 @@ def to_markdown(
             verdict = _verdict_vs_baseline(
                 agg["needle_recall_pct"], tok_delta, base_red, variant_id, baseline
             )
-            tag = ""
-            if variant_id == "tier1+hooks":
-                tag = " *"
+            err_pct = agg.get("shim_error_rate", agg["hook_error_rate"]) * 100
             lines.append(
-                f"| `{variant_id}`{tag} | `{fixture}` | "
+                f"| `{variant_id}` | `{fixture}` | "
                 f"{agg['needle_recall_pct']:.0f} | "
                 f"{agg['decision_preservation_pct']:.0f} | "
                 f"{tok_delta:+.1f} | "
                 f"{agg['latency_p50_ms']:.0f} | "
                 f"{agg['latency_p99_ms']:.0f} | "
-                f"{agg['hook_error_rate']*100:.1f} | "
+                f"{err_pct:.1f} | "
                 f"{verdict} |"
             )
 
@@ -174,10 +178,12 @@ def to_markdown(
     )
     lines.append("")
     lines.append(
-        "\\* `tier1+hooks` falls back to `tier1-only` until #39 lands "
-        "(the hook engine is being implemented in `proxy/src/hooks/` by a "
-        "sibling task). Numbers in those rows are placeholders for the "
-        "hook-engine variant and should match `tier1-only` exactly."
+        "`tier1+hooks` now routes through the hook engine "
+        "(`proxy/src/hooks/`) via `proxy/scripts/run-rewrite.js`. The shim "
+        "registers `context-pressure-reminder` at `request:before-rewrite` "
+        "and `tag-bash-read-elisions` at `request:after-rewrite`; per-cell "
+        "rows carry `hook_tags`, `hook_timings_ms`, `hook_errors`, and "
+        "`total_hook_time_ms`."
     )
     return "\n".join(lines)
 

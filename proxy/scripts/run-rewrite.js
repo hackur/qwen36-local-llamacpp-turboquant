@@ -29,6 +29,8 @@ import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 
 import { rewriteRequest } from "../src/rewrite.js";
+import { createEngine, createContext } from "../src/hooks/engine.js";
+import { resolveHandler } from "../src/hooks/registry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -74,13 +76,16 @@ const VARIANTS = {
     sumy: false,
   },
   "tier1+hooks": {
-    // Hook engine isn't wired yet (sibling task #39). For now this falls back
-    // to tier1-only behavior; the harness flags this in the report.
+    // Tier-1 plus the hook engine. Registers a small built-in handler set
+    // and dispatches at request:before-rewrite + request:after-rewrite around
+    // the rewriteRequest call. Surfaces hook_tags / hook_timings_ms /
+    // hook_errors per cell.
     mode: "enforce",
     tier0: false,
     tier1: true,
     notes: false,
     sumy: false,
+    hooks: true,
   },
 };
 
@@ -182,6 +187,38 @@ async function main() {
   const tokenizer = new StubTokenizer();
   const cacheDir = "/tmp/ab-harness-shim-cache";
 
+  // Optional hook engine. Mirrors the integration shape in proxy/src/server.js:
+  //   - dispatch request:before-rewrite with prompt-token context populated
+  //   - call rewriteRequest()
+  //   - dispatch request:after-rewrite with rewrite + elidedIds populated
+  // Built-in handlers registered: context-pressure-reminder (before) and
+  // tag-bash-read-elisions (after). Filters/predicates kept null — the
+  // handlers self-gate on context fields.
+  let engine = null;
+  let hookCtx = null;
+  if (knobs.hooks) {
+    engine = createEngine({
+      logger: { warn() {}, info() {}, debug() {} },
+    });
+    const beforeHandler = await resolveHandler("built-in:context-pressure-reminder");
+    const afterHandler = await resolveHandler("built-in:tag-bash-read-elisions");
+    engine.register("request:before-rewrite", {
+      id: "context-pressure-reminder",
+      handler: beforeHandler,
+      priority: 100,
+      timeout_ms: 50,
+      // Aggressive threshold for the harness so the hook actually fires on
+      // the heavier fixtures even though the stub tokenizer underestimates.
+      config: { threshold: 0.10 },
+    });
+    engine.register("request:after-rewrite", {
+      id: "tag-bash-read-elisions",
+      handler: afterHandler,
+      priority: 100,
+      timeout_ms: 50,
+    });
+  }
+
   const t0 = performance.now();
   let rewritten, stats, error = null;
   try {
@@ -199,6 +236,35 @@ async function main() {
         elided_tool_result_ids: [],
       };
     } else {
+      // Pre-count prompt tokens so the before-rewrite hook has something
+      // meaningful in promptTokens / promptTokenFraction. Tokenizer cache
+      // makes the second pass inside rewriteRequest a hash lookup.
+      let promptTokens = 0;
+      if (engine) {
+        for (const m of messages) {
+          promptTokens += await tokenizer.countTokens(messageText(m));
+        }
+        // Synthetic nCtx so promptTokenFraction is finite. The harness has
+        // no model context window; pick something that mirrors a 32K llama.
+        const nCtx = 32768;
+        hookCtx = createContext({
+          requestId: `ab-${Date.now()}`,
+          parsed: body,
+          messages,
+          nCtx,
+          promptTokens,
+          promptTokenFraction: promptTokens / nCtx,
+        });
+        if (engine.hasHooksFor("request:before-rewrite")) {
+          await engine.dispatch("request:before-rewrite", hookCtx);
+          // Hook may have replaced/injected into messages; rewriteRequest
+          // operates on body.messages, so sync.
+          if (hookCtx.messages !== messages) {
+            body.messages = hookCtx.messages;
+          }
+        }
+      }
+
       const r = await rewriteRequest({
         body,
         tokenizer,
@@ -209,6 +275,13 @@ async function main() {
       });
       rewritten = r.rewrittenBody;
       stats = r.stats;
+
+      if (engine && hookCtx && engine.hasHooksFor("request:after-rewrite")) {
+        hookCtx.rewrite = r;
+        hookCtx.outboundMessages = rewritten?.messages || null;
+        hookCtx.elidedIds = stats?.elided_tool_result_ids || [];
+        await engine.dispatch("request:after-rewrite", hookCtx);
+      }
     }
   } catch (e) {
     error = e?.message || String(e);
@@ -231,6 +304,16 @@ async function main() {
     Math.max(16, Math.floor((stats?.rewritten_tokens || 0) / 8)),
   );
 
+  const hookFields = hookCtx
+    ? {
+        hook_tags: [...hookCtx.tags],
+        hook_timings_ms: hookCtx.hookTimingsMs,
+        hook_errors: hookCtx.hookErrors,
+        total_hook_time_ms: Object.values(hookCtx.hookTimingsMs)
+          .reduce((a, b) => a + b, 0),
+      }
+    : {};
+
   process.stdout.write(JSON.stringify({
     variant: variantId,
     fixture: fixturePath,
@@ -242,6 +325,7 @@ async function main() {
     elided_count: (stats?.elided_tool_result_ids || []).length,
     error,
     text,
+    ...hookFields,
   }) + "\n");
 }
 

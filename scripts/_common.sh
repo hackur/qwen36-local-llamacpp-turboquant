@@ -69,6 +69,29 @@ ensure_port_free() {
   fi
 }
 
+# single-server guard:v1 — refuse to start if any other llama-server is already
+# running. Stacking multiple servers on the M3 Max risks sustained thermal load
+# and skews benchmark numbers (mixed RSS, contended GPU). Set ALLOW_STACK=1 to
+# override (e.g. intentional A/B comparison on a cool chassis).
+ensure_no_other_llama_server() {
+  [[ "${ALLOW_STACK:-0}" == "1" ]] && return 0
+  local self_pid=$$ pids=() pid cmd
+  while read -r pid _; do
+    [[ -z "$pid" || "$pid" == "$self_pid" ]] && continue
+    pids+=("$pid")
+  done < <(pgrep -lf llama-server 2>/dev/null || true)
+  if (( ${#pids[@]} > 0 )); then
+    echo "❌ Another llama-server is already running (pid(s): ${pids[*]})." >&2
+    echo "   Stacking servers on this Mac risks thermal damage and skews benchmarks." >&2
+    for pid in "${pids[@]}"; do
+      cmd=$(ps -o command= -p "$pid" 2>/dev/null | cut -c1-120)
+      echo "     pid $pid: $cmd" >&2
+    done
+    echo "   Run ./scripts/stop-all.sh first, or set ALLOW_STACK=1 to override." >&2
+    exit 1
+  fi
+}
+
 ensure_model() {
   local path="$1"
   if [[ ! -f "$path" ]]; then
@@ -176,6 +199,75 @@ preflight_memory() {
       exit 1
     fi
     echo "    FORCE=1 set — proceeding anyway." >&2
+  fi
+}
+
+# chat_template_flags <alias-or-path>
+#   Emits `--chat-template-file <path>` for Qwen 3.5 / 3.6 family aliases so
+#   start scripts pick up the froggeric/Qwen-Fixed-Chat-Templates v19 unified
+#   template (fixes empty-think poisoning, KV-cache invalidation, tool-call
+#   XML parsing, legacy-engine `loop.previtem` crashes).
+#
+#   No-op for non-Qwen aliases (Gemma 4, GPT-OSS, Nemotron, TinyLlama) and for
+#   raw file-paths whose alias family we can't infer — those keep the model's
+#   embedded template via `--jinja` alone.
+#
+#   Override: set CHAT_TEMPLATE=/path/to/your.jinja to force a specific template
+#   for one launch, or CHAT_TEMPLATE=off to disable.
+#
+#   Usage:  TEMPLATE_FLAGS=( $(chat_template_flags "$MODEL_INPUT") )
+chat_template_flags() {
+  local in="$1"
+  if [[ "${CHAT_TEMPLATE:-}" == "off" ]]; then
+    return 0
+  fi
+  if [[ -n "${CHAT_TEMPLATE:-}" ]]; then
+    if [[ -f "$CHAT_TEMPLATE" ]]; then
+      printf -- "--chat-template-file %s " "$CHAT_TEMPLATE"
+    else
+      echo "⚠️  CHAT_TEMPLATE=$CHAT_TEMPLATE not found — skipping override." >&2
+    fi
+    return 0
+  fi
+  # Path inputs: no family inference. Caller can set CHAT_TEMPLATE= explicitly.
+  if [[ "$in" == */* || "$in" == *.gguf ]]; then
+    return 0
+  fi
+  case "$in" in
+    qwen36-neo|qwen36-35b|qwen36-27b|qwen36-mtp|qwen35-9b|qwen3.5-9b-abliterated-journalist|crow-9b|qwen3.5-0.8b)
+      local t="$REPO/configs/chat-templates/chat_template.jinja"
+      if [[ -f "$t" ]]; then
+        printf -- "--chat-template-file %s " "$t"
+      fi
+      ;;
+  esac
+}
+
+# mcp_proxy_flag <llama-server-binary>
+#   Emit the MCP CORS-proxy flag accepted by this binary when MCP_PROXY=1,
+#   otherwise nothing. Mainline uses --ui-mcp-proxy; the turboquant fork
+#   (branched before the rename) only has the deprecated --webui-mcp-proxy.
+#   We feature-detect rather than hardcode.
+#
+#   Enabling the proxy lets llama-server make outbound HTTP/SSE connections
+#   to whatever MCP URL the user types into the WebUI — breaks the offline
+#   guarantee for any session that has MCP servers configured. Opt-in only.
+#
+#   Usage:  MCP_FLAGS=( $(mcp_proxy_flag "$BIN") )
+mcp_proxy_flag() {
+  [[ "${MCP_PROXY:-0}" == "1" || "${MCP_PROXY:-0}" == "true" ]] || return 0
+  local bin="$1"
+  [[ -x "$bin" ]] || return 0
+  # 5s timeout in case the binary hangs (e.g. waiting on a missing dylib).
+  # stderr suppressed because Metal/CUDA init may spew warnings on --help.
+  local help
+  help="$(/usr/bin/env perl -e 'alarm 5; exec @ARGV' "$bin" --help 2>/dev/null || true)"
+  if grep -q -- "--ui-mcp-proxy" <<<"$help"; then
+    printf -- "--ui-mcp-proxy "
+  elif grep -q -- "--webui-mcp-proxy" <<<"$help"; then
+    printf -- "--webui-mcp-proxy "
+  else
+    echo "⚠️  MCP_PROXY=1 set but llama-server at $bin supports neither --ui-mcp-proxy nor --webui-mcp-proxy — ignoring." >&2
   fi
 }
 

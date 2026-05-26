@@ -42,6 +42,7 @@ resolve_model "$MODEL_INPUT"
 MODEL="$RESOLVED_MODEL"
 ensure_model "$MODEL"
 load_model_defaults "$MODEL_INPUT"
+ensure_no_other_llama_server
 ensure_port_free "$PORT"
 mkdir -p "$REPO/logs"
 

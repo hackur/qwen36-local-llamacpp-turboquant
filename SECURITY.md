@@ -14,7 +14,11 @@ In scope:
 - A privacy regression: any change that re-introduces personal paths,
   hostnames, or secrets after the static-check linter green-listed them.
 - Anything that causes `llama-server` started by our scripts to make network
-  connections beyond `127.0.0.1`.
+  connections beyond `127.0.0.1` **with `MCP_PROXY` unset**. The
+  `MCP_PROXY=1` opt-in intentionally enables an outbound `/cors-proxy`
+  endpoint for the WebUI's MCP client (see `docs/mcp-integration.md`
+  and `docs/offline-mode.md`). The default-off behavior is the security
+  contract; an unexpected outbound with `MCP_PROXY` unset is a bug.
 
 Out of scope (not this repo's bugs, but the upstream projects' — please file
 there):

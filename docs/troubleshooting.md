@@ -30,6 +30,21 @@ lsof -nP -iTCP:10501 -sTCP:LISTEN
 ```
 Kill the holder or override: `PORT=10503 ./scripts/start-turboquant.sh`.
 
+### `Another llama-server is already running`
+The `ensure_no_other_llama_server` sentinel in `scripts/_common.sh` (single-server guard:v1) refuses to start a second `llama-server` on this machine because stacking them risks sustained thermal load on the M3 Max and skews benchmark numbers. The error lists each surviving pid and its command line.
+
+Default response:
+```bash
+./scripts/stop-all.sh
+```
+
+`stop-all.sh` now loops until clear (up to 5 passes), `kill -0`-checks before SIGKILL, and exits non-zero with the surviving pid(s) printed if anything is left — a "✓ stopped" line means the machine is actually clean. If survivors remain, inspect `ps -p <pid> -o pid,ppid,command` to find the parent re-spawning them.
+
+Intentional A/B with two servers up at once (cool chassis, short duration):
+```bash
+ALLOW_STACK=1 ./scripts/start-baseline.sh
+```
+
 ### Model file not found
 Open LM Studio → Models, confirm the GGUF is downloaded. Or override:
 ```bash

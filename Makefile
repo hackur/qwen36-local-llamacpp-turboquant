@@ -3,9 +3,9 @@ SHELL := bash
 .DEFAULT_GOAL := help
 
 .PHONY: help build start start-baseline start-tiny start-nemotron start-crow \
-        start-gemma4-e4b start-qwen35-9b start-gpt-oss start-gemma4-26b start-qwen36-27b start-qwen36-neo \
+        start-gemma4-e4b start-qwen35-9b start-gpt-oss start-gemma4-26b start-qwen36-27b start-qwen36-neo start-qwen36-mtp start-journalist \
         start-embed \
-        stop status info info-watch bench needle demo open preflight check \
+        stop status info info-watch bench bench-suite bench-tui mcp-fs mcp-git mcp-time needle demo open preflight check \
         install-launchd uninstall-launchd clean audit-offline models \
         proxy-install proxy-test proxy-start proxy-smoke \
         privacy-scan prepush quarterly-audit
@@ -74,6 +74,14 @@ start-qwen36-neo: ## Start Qwen 3.6 27B NEO-CODE Heretic Q5_K_M (~19.5 GB dense,
 	@mkdir -p logs
 	MODEL=qwen36-neo ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
 
+start-qwen36-mtp: ## Start Qwen 3.6 27B MTP UD-Q4_K_XL on mainline (~18 GB dense, MTP draft, port 10502)
+	@mkdir -p logs
+	./scripts/start-qwen36-mtp.sh > logs/qwen36-mtp.log 2>&1 &
+
+start-journalist: ## Start Qwen3.5-9B-abliterated-journalist Q4_K_M as sidecar on :10503 (~5.6 GB, OSINT)
+	@mkdir -p logs
+	PORT=10503 MODEL=qwen3.5-9b-abliterated-journalist ./scripts/start-turboquant.sh > logs/journalist.log 2>&1 &
+
 start-embed: ## Start embeddings companion server (port 10510). Needs ./models/embed.gguf or MODEL=/path
 	@mkdir -p logs
 	./scripts/start-embed.sh > logs/embed.log 2>&1 &
@@ -93,6 +101,29 @@ info-watch: ## Same as `info`, refreshing every 2 s
 bench: ## Run A/B benchmark (assumes both servers up)
 	python3 scripts/bench.py 10500 "baseline" || true
 	python3 scripts/bench.py 10501 "turboquant" || true
+
+bench-suite: ## Run a bench suite headless. SUITE=benchmarks/suites/qwen36-family.yaml
+	@SUITE="$${SUITE:-benchmarks/suites/qwen36-family.yaml}"; \
+	echo "▶ $$SUITE  (one server at a time — thermal)"; \
+	python3 scripts/bench_runner.py run "$$SUITE"
+
+bench-tui: ## Interactive TUI for a bench suite (textual). SUITE=… or RUN_DIR=…
+	@if [[ -n "$$RUN_DIR" ]]; then \
+	  python3 scripts/bench_tui.py "$$RUN_DIR"; \
+	elif [[ -n "$$SUITE" ]]; then \
+	  python3 scripts/bench_tui.py "$$SUITE" --spawn; \
+	else \
+	  python3 scripts/bench_tui.py --latest; \
+	fi
+
+mcp-fs: ## MCP filesystem bridge (sandboxed to repo, :4001). Add http://127.0.0.1:4001/mcp in WebUI.
+	./scripts/mcp-bridge.sh fs
+
+mcp-git: ## MCP git bridge (sandboxed to repo, :4003).
+	./scripts/mcp-bridge.sh git
+
+mcp-time: ## MCP time bridge (:4002).
+	./scripts/mcp-bridge.sh time
 
 needle: ## Long-context recall test on TurboQuant
 	python3 scripts/needle.py 50000

@@ -1,0 +1,22 @@
+name: qwen36-family
+description: A/B sweeps across Qwen 3.6 server variants (baseline / turboquant / mtp).
+defaults:
+  n: 5
+  max_tokens: 500
+  prompt: |
+    Explain in detail how transformer attention mechanisms work, including
+    multi-head attention, scaled dot-product attention, and why positional
+    encodings are needed. Cover at least KV caching and rotary embeddings.
+jobs:
+  - id: baseline-vs-turboquant
+    a: { label: baseline,   port: 10500 }
+    b: { label: turboquant, port: 10501 }
+
+  - id: turboquant-vs-mtp
+    a: { label: turboquant, port: 10501 }
+    b: { label: mtp,        port: 10502 }
+
+  - id: baseline-vs-mtp
+    a: { label: baseline, port: 10500 }
+    b: { label: mtp,      port: 10502 }
+    max_tokens: 800

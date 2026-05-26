@@ -2,7 +2,17 @@
 
 ## Unreleased
 
-(no entries yet)
+### Added
+
+- **Single-server guard (`single-server guard:v1`)** in `scripts/_common.sh` — every `start-*.sh` now refuses to launch if any other `llama-server` is already running, even on a different port. Stacking servers on this M3 Max risks sustained thermal load and skews benchmark numbers; the guard surfaces the surviving pid(s) and points to `stop-all.sh`. Override with `ALLOW_STACK=1` for intentional A/B on a cool chassis. Wired into `start-baseline`, `start-fallback`, `start-embed`, `start-vision`, `start-turboquant`, `start-qwen36-mtp` (the last two only in non-`--dry-run` paths).
+
+### Fixed
+
+- **`scripts/stop-all.sh` race + survivor reporting.** Previous single-pass SIGTERM-then-SIGKILL design missed pids spawned between passes (live repro: pid 68346 received SIGKILL but was never in the SIGTERM list; pid 68938 survived entirely despite "✓ stopped" being printed). Now: bounded retry loop (max 5 passes), per-pid `kill -0` check before SIGKILL, final re-scan that exits non-zero with surviving pids printed to stderr. `✓ stopped` now means the machine is actually clean.
+
+### Docs
+
+- `docs/troubleshooting.md` — new entry for the `Another llama-server is already running` error, `ALLOW_STACK=1` override, and the strengthened `stop-all.sh` semantics.
 
 ## v0.0.2 — 2026-05-07
 

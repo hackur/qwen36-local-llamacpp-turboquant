@@ -23,6 +23,7 @@ if [[ -z "$MMPROJ" || ! -f "$MMPROJ" ]]; then
   exit 1
 fi
 ensure_model "$MMPROJ"
+ensure_no_other_llama_server
 ensure_port_free "$PORT"
 
 # memory-preflight:v1 — vision combos (text server on :10501 + this on :10503)

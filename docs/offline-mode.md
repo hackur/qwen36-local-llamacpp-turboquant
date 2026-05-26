@@ -77,6 +77,24 @@ networksetup -setairportpower en0 off
 networksetup -setairportpower en0 on
 ```
 
+## MCP opt-in trade-off
+
+`docs/mcp-integration.md` describes a `MCP_PROXY=1` opt-in that turns
+on the WebUI's MCP CORS proxy in `llama-server`. **It breaks the
+offline guarantee** for any session that uses it:
+
+- llama-server exposes an outbound HTTP path (`/cors-proxy?url=…`)
+  that proxies arbitrary URLs the WebUI hands it.
+- Verified live 2026-05-25 — with `MCP_PROXY=1` the WebUI proxied a
+  favicon fetch to `https://www.google.com/s2/favicons` through
+  llama-server. Log: `proxy_request: proxying GET request to
+  https://www.google.com:443/…`.
+
+Default is **off** across every `scripts/start-*.sh`. The launchd
+primary plist does not set it — the always-on offline default stays
+clean. Only set `MCP_PROXY=1` when you intend to use MCP and accept
+that trade.
+
 ## Things that DO need network (do them while online)
 
 - **First build** — clones llama.cpp from GitHub. Done once.

@@ -1,0 +1,33 @@
+name: kv-cache-types
+description: |
+  KV cache dtype sweep. Each running llama-server is pinned to one KV dtype at
+  launch, so this suite assumes the operator runs the two sides on DIFFERENT
+  ports (one server per KV dtype). Suggested operator setup:
+    Side A: KV=f16  PORT=10500 scripts/start-baseline.sh
+    Side B: KV=q8_0 PORT=10501 scripts/start-baseline.sh   # second baseline
+  Then run this suite. Thermal rule still applies: only one llama-server
+  actually serving traffic at any moment — the runner enforces that.
+defaults:
+  n: 5
+  max_tokens: 500
+  prompt: |
+    Summarize the trade-offs between f16, q8_0, and q4_0 KV cache quantization
+    for long-context inference, with specific attention to memory footprint
+    and any quality degradation observed in practice.
+jobs:
+  # Two baseline servers, different KV dtypes, different ports.
+  - id: baseline-kv-f16-vs-q8_0
+    a: { label: baseline-kv-f16,  port: 10500 }
+    b: { label: baseline-kv-q8_0, port: 10501 }
+
+  # Turboquant default (q8_0) on its canonical port, vs a baseline launched
+  # with KV=q4_0 on a spare port (e.g. 10503).
+  - id: turboquant-q8_0-vs-baseline-q4_0
+    a: { label: turboquant-kv-q8_0,  port: 10501 }
+    b: { label: baseline-kv-q4_0,    port: 10503 }
+
+  # MTP server (q8_0 KV by default) vs baseline f16. Operator restarts
+  # baseline with KV=f16 on 10500 before running.
+  - id: mtp-q8_0-vs-baseline-f16
+    a: { label: mtp-kv-q8_0,     port: 10502 }
+    b: { label: baseline-kv-f16, port: 10500 }

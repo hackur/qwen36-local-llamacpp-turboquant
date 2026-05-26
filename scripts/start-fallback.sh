@@ -15,6 +15,7 @@ LOG="$REPO/logs/fallback.log"
 resolve_model "$MODEL_INPUT"
 MODEL="$RESOLVED_MODEL"
 ensure_model "$MODEL"
+ensure_no_other_llama_server
 ensure_port_free "$PORT"
 mkdir -p "$REPO/logs"
 

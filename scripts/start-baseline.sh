@@ -14,8 +14,14 @@ LOG="$REPO/logs/baseline.log"
 resolve_model "$MODEL_INPUT"
 MODEL="$RESOLVED_MODEL"
 ensure_model "$MODEL"
+ensure_no_other_llama_server
 ensure_port_free "$PORT"
 mkdir -p "$REPO/logs"
+
+# shellcheck disable=SC2207
+TEMPLATE_FLAGS=( $(chat_template_flags "$MODEL_INPUT") )
+# shellcheck disable=SC2207
+MCP_FLAGS=( $(mcp_proxy_flag "$BIN") )
 
 echo "▶ baseline @ http://127.0.0.1:$PORT (f16 KV, ${CTX} ctx)"
 echo "  log → $LOG"
@@ -25,5 +31,7 @@ exec "$BIN" \
   -c "$CTX" \
   "${COMMON[@]}" \
   "${SAMPLING[@]}" \
+  ${TEMPLATE_FLAGS[@]+"${TEMPLATE_FLAGS[@]}"} \
+  ${MCP_FLAGS[@]+"${MCP_FLAGS[@]}"} \
   --alias qwen3.6-baseline \
   2>&1 | tee "$LOG"

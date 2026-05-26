@@ -66,5 +66,20 @@ Benchmark submissions should include:
 - context length and KV cache type
 - prompt/gen token rates
 - whether the server was cold or warm
+- `max_tokens` / `n_predict` cap used
+- sample count and median (not mean) tok/s, plus min/max
+- which script produced the numbers (e.g. `scripts/bench-ab.sh`)
+
+A **smoke test is not verification.** A single successful round-trip
+proves the wiring connects — it does not belong in `benchmarks/RESULTS.md`
+as a performance result. Use `scripts/bench-ab.sh` (or equivalent N≥3
+warm-state harness) before adding an entry.
+
+**Do not measure model speed through an agent harness.** Wall-time
+through hermes/any agent is dominated by agent init, not generation.
+Bench at the raw `/v1/chat/completions` endpoint. Agent-layer timings
+belong in agent-layer docs, not `RESULTS.md`.
+
+See `docs/benchmarking-discipline.md` for the full rationale.
 
 Avoid raw logs that contain local usernames, absolute private paths, or machine-specific process tables.

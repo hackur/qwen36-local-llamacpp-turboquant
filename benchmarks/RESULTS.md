@@ -1,5 +1,15 @@
 # Benchmark results — Qwen 3.6 + llama.cpp + TurboQuant on M3 Max 64 GB
 
+> **Required metadata for new entries** (see `docs/benchmarking-discipline.md`
+> and `CONTRIBUTING.md`):
+> hardware · model + quant · llama.cpp fork + commit SHA · ctx · KV dtype ·
+> sampling params · `max_tokens` cap · warm/cold · sample count · median
+> tok/s + min/max · producing script.
+>
+> Single-prompt smoke tests and agent-harness wall times do not belong here.
+> Use `scripts/bench-ab.sh` (N=5 warm, raw `/v1/chat/completions`) for A/B
+> comparisons; the script enforces the one-server-at-a-time thermal rule.
+
 **Hardware**: Apple M3 Max, 16 cores (12P + 4E), 64 GB unified memory
 **OS**: macOS 26.4.1
 **Model**: `Qwen3.6-35B-A3B-Q6_K.gguf` (28.5 GB, MoE 35B/3B-active)

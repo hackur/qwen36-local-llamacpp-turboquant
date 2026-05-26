@@ -1,0 +1,5 @@
+# Optional deps for the interactive A/B bench TUI (scripts/bench_tui.py).
+# Install with:  pip install -r requirements-tui.txt
+# Not required for scripts/bench-ab.sh (zero-dep fallback).
+textual>=0.60
+pyyaml>=6

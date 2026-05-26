@@ -30,6 +30,7 @@ KV="${KV:-turbo3}"   # turbo2 / turbo3 / turbo4 / q8_0 / q4_0 / f16
 # Skip port-guard on dry-run — we never actually bind, and a busy port shouldn't
 # stop a `--dry-run` from previewing the command line.
 if (( ! DRY_RUN )); then
+  ensure_no_other_llama_server
   ensure_port_free "$PORT"
 fi
 mkdir -p "$REPO/logs"
@@ -54,6 +55,15 @@ apply_kv_split
 # shellcheck disable=SC2207
 ROPE_FLAGS=( $(rope_args) )
 
+# Froggeric Qwen-Fixed-Chat-Templates v19 for Qwen 3.5/3.6 aliases (no-op otherwise).
+# shellcheck disable=SC2207
+TEMPLATE_FLAGS=( $(chat_template_flags "$MODEL_INPUT") )
+
+# MCP CORS proxy — set MCP_PROXY=1 to enable in-WebUI MCP server access.
+# Off by default; breaks offline guarantee when on. See docs/mcp-integration.md.
+# shellcheck disable=SC2207
+MCP_FLAGS=( $(mcp_proxy_flag "$BIN") )
+
 # metrics-opt-in:v1 — set METRICS=1 to enable Prometheus /metrics endpoint.
 METRICS_FLAGS=()
 if [[ "${METRICS:-0}" == "1" || "${METRICS:-0}" == "true" ]]; then
@@ -76,6 +86,8 @@ if (( DRY_RUN )); then
     "${COMMON[@]}" \
     "${SAMPLING[@]}" \
     ${ROPE_FLAGS[@]+"${ROPE_FLAGS[@]}"} \
+    ${TEMPLATE_FLAGS[@]+"${TEMPLATE_FLAGS[@]}"} \
+    ${MCP_FLAGS[@]+"${MCP_FLAGS[@]}"} \
     ${METRICS_FLAGS[@]+"${METRICS_FLAGS[@]}"} \
     --alias qwen3.6-turboquant
   printf " 2>&1 | tee %q\n" "$LOG"
@@ -90,6 +102,8 @@ TURBO_LAYER_ADAPTIVE=1 exec "$BIN" \
   "${COMMON[@]}" \
   "${SAMPLING[@]}" \
   ${ROPE_FLAGS[@]+"${ROPE_FLAGS[@]}"} \
+  ${TEMPLATE_FLAGS[@]+"${TEMPLATE_FLAGS[@]}"} \
+  ${MCP_FLAGS[@]+"${MCP_FLAGS[@]}"} \
   ${METRICS_FLAGS[@]+"${METRICS_FLAGS[@]}"} \
   --alias qwen3.6-turboquant \
   2>&1 | tee "$LOG"

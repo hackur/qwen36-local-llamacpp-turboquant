@@ -128,6 +128,8 @@ Targets:
   info                Full one-shot dashboard (env, server, memory, network, disk, launchd, last bench)
   info-watch          Same as `info`, refreshing every 2 s
   bench               Run A/B benchmark (assumes both servers up)
+  bench-suite         Run a bench suite headless (SUITE=benchmarks/suites/*.yaml)
+  bench-tui           Interactive TUI for a bench suite (pip install -r requirements-tui.txt)
   needle              Long-context recall test on TurboQuant
   demo                Terminal chat REPL
   open                Open the web demo in your browser

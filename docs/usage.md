@@ -269,6 +269,45 @@ curl -s http://127.0.0.1:10501/v1/chat/completions \
 
 ## Workflows
 
+### Tool use via MCP in the WebUI
+
+The llama-server WebUI ships an MCP client (PR #18655). To wire it up
+locally:
+
+```bash
+# 1. Restart llama-server with the CORS proxy on (breaks offline guarantee
+#    for that session — see docs/offline-mode.md).
+make stop
+MCP_PROXY=1 ./scripts/start-turboquant.sh
+
+# 2. In another shell, start a bridge that wraps a stdio MCP server
+#    over Streamable HTTP with CORS for the WebUI origin.
+make mcp-fs    # filesystem sandboxed to repo, port 4001
+# or: make mcp-git / make mcp-time
+
+# 3. Open http://127.0.0.1:10501/ → Settings → MCP →
+#    Add New Server → http://127.0.0.1:4001/mcp
+```
+
+Full plan, gotchas, and security caveats: `docs/mcp-integration.md`.
+Smoke-test result: `benchmarks/mcp/2026-05-25-fs-smoke.md`.
+
+### Benchmarking A/B with the suite TUI
+
+```bash
+# One-off A/B between two running ports (zero deps):
+./scripts/bench-ab.sh 10500 10501 baseline turboquant
+
+# Suite-driven, queue + live status:
+python3 -m venv .venv && .venv/bin/pip install -r requirements-tui.txt
+make bench-suite SUITE=benchmarks/suites/qwen36-family.yaml   # headless
+make bench-tui   SUITE=benchmarks/suites/qwen36-family.yaml   # interactive
+```
+
+The runner enforces **one llama-server bench at a time** via a
+lockfile — the TUI waits for you to bring up each side. Rules of the
+road: `docs/benchmarking-discipline.md`.
+
 ### Streaming chat — three languages
 
 #### curl (raw SSE)

@@ -54,6 +54,17 @@ Full results: [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
 
 Requirements: macOS on Apple Silicon, Xcode command line tools, Git, CMake, curl, jq, Python 3, and enough disk for the selected GGUF model plus two `llama.cpp` checkouts.
 
+Optional Python deps (only for `make bench-tui` / `make bench-suite`):
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-tui.txt
+```
+
+Homebrew Python is PEP-668 externally-managed, so a venv is required;
+the directory is gitignored. Optional Node deps for `make mcp-*`:
+`brew install node` (npx pulls supergateway on first run).
+
 ```bash
 make preflight                # checks tools, builds, and model symlinks
 make build                    # one-time, ~5 min, Metal builds of both forks
@@ -129,7 +140,10 @@ Targets:
   info-watch          Same as `info`, refreshing every 2 s
   bench               Run A/B benchmark (assumes both servers up)
   bench-suite         Run a bench suite headless (SUITE=benchmarks/suites/*.yaml)
-  bench-tui           Interactive TUI for a bench suite (pip install -r requirements-tui.txt)
+  bench-tui           Interactive TUI for a bench suite (see Optional Python deps below)
+  mcp-fs              MCP filesystem bridge (sandboxed to repo, :4001 → /mcp)
+  mcp-git             MCP git bridge (sandboxed to repo, :4003)
+  mcp-time            MCP time bridge (:4002)
   needle              Long-context recall test on TurboQuant
   demo                Terminal chat REPL
   open                Open the web demo in your browser

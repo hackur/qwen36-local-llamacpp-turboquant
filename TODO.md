@@ -215,11 +215,11 @@ preserved when the opt-in is off.
       `list_allowed_directories` → `list_directory` → NL summary of 30
       files, 338 tokens / 25 s / 13.09 tok/s. Not a perf claim — single
       prompt, single model.
-- [ ] **P6.4 — Quickstart section** in `docs/mcp-integration.md` with
-      the exact `make` + WebUI steps that just worked. Note three
-      gotchas discovered live: (a) URL ends in `/mcp` not `/sse`,
-      (b) supergateway needs `--outputTransport streamableHttp`,
-      (c) supergateway needs `--cors http://127.0.0.1:10501`.
+- [x] **P6.4 — Quickstart section** in `docs/mcp-integration.md` with
+      the exact `make` + WebUI steps that just worked. Three live-
+      discovered gotchas documented inline: URL ends in `/mcp` not
+      `/sse`; supergateway needs `--outputTransport streamableHttp`;
+      `--cors http://127.0.0.1:10501` required.
 - [ ] **P6.6 — Offline-guarantee regression test.** During the smoke
       test, `MCP_PROXY=1` produced a real outbound HTTPS to
       `www.google.com` (favicon fetch via `/cors-proxy`). Add a
@@ -230,7 +230,139 @@ preserved when the opt-in is off.
       the opt-in and the **confirmed** offline trade-off (cite the
       favicon-leak observation from the smoke test).
 
-### Out of scope (deferred or won't-do)
+## P7 - Hygiene, safeguards & known bugs
+
+Tracks bugs and gaps found in the 2026-05-25 cross-cutting audit. Each item
+verified against the actual file before adding (some agent-reported "bugs"
+were already-handled cases and are not listed). Items below are confirmed
+real.
+
+### Landed during the 2026-05-25 audit pass
+
+- [x] **`Makefile mcp-fs` help text said `/sse`**; corrected to `/mcp` to
+      match the actual Streamable HTTP path supergateway exposes.
+- [x] **`mcp_proxy_flag` hardened** against a hanging or non-zero
+      `llama-server --help` — now wrapped in a 5 s perl `alarm` and
+      stderr suppressed so Metal init warnings can't pollute detection.
+- [x] **`docs/offline-mode.md`** — MCP opt-in trade-off section added
+      (cites the observed favicon → google.com leak).
+- [x] **`SECURITY.md`** — scope now explicitly says the offline
+      contract is "with `MCP_PROXY` unset"; intentional outbound under
+      `MCP_PROXY=1` is documented, not a vuln.
+- [x] **`docs/usage.md`** — Workflows now lists MCP-in-WebUI and the
+      bench-tui suite recipe up front, before the streaming-chat
+      examples.
+- [x] **`README.md`** — Requirements block now points at the `.venv`
+      install for `bench-tui` and notes the Node dep for `mcp-*`.
+- [x] **`CHANGELOG.md` Unreleased** — backfilled MCP, bench-TUI,
+      benchmarking-discipline, Froggeric template, MTP, and the
+      doc trail that landed with them.
+
+### Landed 2026-05-25 (documenting for traceability — close out next release)
+
+- [x] **`single-server guard:v1`** — `ensure_no_other_llama_server` in
+      `scripts/_common.sh` refuses to launch a second `llama-server` on this
+      machine. Wired into all six `start-*.sh`. `ALLOW_STACK=1` overrides.
+      Origin: live incident where 3 servers stacked at once on the M3 Max
+      ([[feedback_thermal_caution]]).
+- [x] **`stop-all.sh` race + survivor reporting.** Previous single-pass design
+      missed pids spawned between SIGTERM and SIGKILL (live repro: 68346 SIGKILL'd
+      without being in the SIGTERM list; 68938 survived under "✓ stopped").
+      Now: bounded 5-pass loop, per-pid `kill -0` before SIGKILL, non-zero exit
+      with survivor list if anything remains.
+- [x] `docs/troubleshooting.md` — new "Another llama-server is already running"
+      entry; CHANGELOG Unreleased section updated.
+
+### Bugs (verified)
+
+- [ ] **`scripts/start-fallback.sh` does not apply `chat_template_flags`.**
+      All other `start-*.sh` for Qwen aliases pull in the froggeric v19
+      template via `TEMPLATE_FLAGS=( $(chat_template_flags "$MODEL_INPUT") )`;
+      `start-fallback.sh` only passes `--jinja` and so falls back to the
+      model's embedded template. Re-introduces the empty-think /
+      KV-cache-invalidation / tool-call XML bugs the v19 template fixed.
+      Fix: mirror the wiring from `start-baseline.sh` (lines around 20).
+- [ ] **`scripts/bench-ab.sh` median function silently returns 0 on empty
+      input.** `median()` at line ~57 (`sort -n | awk ... print (NR%2 ? ...
+      : ...)`) does not check `NR == 0`. If every curl in a side fails (server
+      down, network hiccup mid-suite), the side reports `0.00 tok/s` instead
+      of failing loudly. Fix: emit a marker like `ERROR` when `NR == 0`, and
+      have callers treat it as job failure.
+- [ ] **`scripts/bench_suite.py` validator does not catch same-port A/B
+      collisions.** A suite job with `a.port == b.port` validates clean,
+      then deadlocks at runtime under the runner's "only one of A/B may
+      listen" rule (status stays `waiting_port` forever). Add a
+      validation check that `a.port != b.port`.
+- [ ] **`scripts/bench_suite.py merge_defaults` doesn't resolve
+      `prompt_file`.** Per-job `prompt_file` overrides are not opened or
+      validated at load time; failure surfaces at runtime as a file-open
+      error mid-job. Either resolve and inline at validate time, or fail
+      validation on missing path.
+
+### Incomplete / undocumented (verified)
+
+- [ ] **`start-vision.sh`, `start-embed.sh` lack `--dry-run` support.**
+      The other four `start-*.sh` honor `--dry-run` to print the command
+      without launching, used in CI and CONTRIBUTING.md examples. These
+      two diverge. Fix: copy the `DRY_RUN` parsing block from
+      `start-turboquant.sh`.
+- [ ] **`scripts/mcp-bridge.sh` CORS_ORIGIN defaults to `:10501`
+      (turboquant) only.** Users running baseline on `:10500` + MCP must
+      set `MCP_CORS=http://127.0.0.1:10500`; not mentioned in the
+      bridge's `--help` or `docs/mcp-integration.md`. Either document or
+      auto-detect from listening llama-server ports.
+- [ ] **`benchmarks/mcp/` has only `fs` smoke result.** `make mcp-git` /
+      `make mcp-time` ship as P6.5 targets but have no recorded smoke
+      runs analogous to `2026-05-25-fs-smoke.md`. Run each once and
+      drop a sibling .md, or note explicitly which bridges are
+      smoke-tested vs only wired.
+
+### Docs (verified gaps)
+
+- [ ] **`README.md` "What can you do with this?" omits TUI and MCP.**
+      Section at line ~66 lists `make bench`, proxy, demo — not
+      `make bench-tui` / `make bench-suite` / `make mcp-fs`. New users
+      can't discover P5/P6 from the front page.
+- [ ] **`README.md` "All targets" list (line ~106) is stale.** Doesn't
+      mention `bench-tui`, `bench-suite`, `mcp-fs`, `mcp-git`,
+      `mcp-time`. Likely out of sync with `Makefile` help output.
+      Either regenerate from `make help`, or drop the list and
+      cross-link `make help` instead.
+- [ ] **`README.md` "What's new in v0.0.2" trailer doesn't mention
+      anything since v0.0.2 (TUI, MCP, single-server guard).** Either
+      retitle as "Highlights" with a CHANGELOG cross-link, or add a
+      brief "Since v0.0.2" line. Whichever scales better — the trailer
+      will rot otherwise.
+- [ ] **`CONTRIBUTING.md` has no guidance for bench-suite contributions.**
+      Section at line ~59 only covers `bench-ab.sh` and the metadata-block
+      requirement. Add a short pointer to `benchmarks/suites/*.yaml`,
+      `scripts/bench_suite.py validate`, and the events/control JSONL
+      protocol (or just link to TODO P5's "Protocol contract" block as
+      the source of truth).
+- [ ] **`docs/benchmarking-discipline.md` doesn't document the P5 runner
+      protocol.** Spec lives only in TODO.md P5. When P5 closes, the spec
+      should migrate (events.jsonl/control.jsonl schemas, run-dir layout,
+      phase state machine) so the roadmap can be pruned.
+- [ ] **`docs/mcp-integration.md` claim "Investigation complete" is
+      misleading.** P6.4 quickstart, P6.6 offline regression test, and
+      P6.8 README cross-link are still open. Either soften the header to
+      "Investigation complete; integration in progress" or close out the
+      three subtasks first.
+
+### Not bugs (audited but no action)
+
+- `ensure_no_other_llama_server` runs after `ensure_model` in some
+  scripts: intentional. Model-not-found is the faster, cheaper check;
+  keep it first.
+- `bench_runner.py` `try/except ImportError` for `bench_suite` is
+  already a graceful fallback with a clear stderr message — not a bug.
+- `bench_tui.py` table format uses `f"{x:.2f}" if x is not None else
+  ""` — already guarded.
+- `SWEEP.md` exists at `benchmarks/SWEEP.md` — not missing.
+
+## P6 — MCP out-of-scope (deferred or won't-do)
+
+> Appendix to P6 above. Items here were considered and ruled out.
 
 - MCP **sampling** (server-initiated callbacks into the client). Upstream
   llama-server doesn't implement it — see ggml-org discussion #22640.

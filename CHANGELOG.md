@@ -5,6 +5,20 @@
 ### Added
 
 - **Single-server guard (`single-server guard:v1`)** in `scripts/_common.sh` — every `start-*.sh` now refuses to launch if any other `llama-server` is already running, even on a different port. Stacking servers on this M3 Max risks sustained thermal load and skews benchmark numbers; the guard surfaces the surviving pid(s) and points to `stop-all.sh`. Override with `ALLOW_STACK=1` for intentional A/B on a cool chassis. Wired into `start-baseline`, `start-fallback`, `start-embed`, `start-vision`, `start-turboquant`, `start-qwen36-mtp` (the last two only in non-`--dry-run` paths).
+- **MCP in the llama.cpp WebUI** end-to-end. `MCP_PROXY=1` opt-in feature-detected per binary via `mcp_proxy_flag` in `scripts/_common.sh` (emits `--ui-mcp-proxy` on mainline, `--webui-mcp-proxy` on the older turboquant fork). `scripts/mcp-bridge.sh fs|git|time` wraps stdio MCP servers via `supergateway --outputTransport streamableHttp --cors http://127.0.0.1:10501` — three flags discovered live as all required. `make mcp-fs / mcp-git / mcp-time` targets. Default off — turning it on intentionally breaks the offline guarantee (`/cors-proxy` outbound; observed favicon fetch to google.com under `MCP_PROXY=1`). Live smoke test: `benchmarks/mcp/2026-05-25-fs-smoke.md` (qwen36-turboquant → `list_allowed_directories` → `list_directory` → NL summary, 338 tok / 25 s / 13.09 tok/s).
+- **Interactive A/B bench TUI** (Textual + pyyaml, opt-in via `requirements-tui.txt`). `scripts/bench_runner.py` queues jobs from `benchmarks/suites/*.yaml`, enforces one-server-at-a-time via lockfile + port-solo polling, emits append-only `events.jsonl` / reads `control.jsonl`. `scripts/bench_tui.py` provides tree + table + log panes with `s` / `r` / `k` keybinds. `make bench-suite` (headless) + `make bench-tui` (interactive). Suite schema validator at `scripts/bench_suite.py`. Zero-dep fallback `scripts/bench-ab.sh` (N=5 warm, median/min/max) preserved.
+- **Benchmarking discipline doc** (`docs/benchmarking-discipline.md`) + RESULTS.md metadata header. Captures the 2026-05-25 MTP-vs-turboquant failure mode (agent-harness wall time treated as model speed) and the rules going forward (matched artifacts, fixed `max_tokens`, warm-state, N≥3 median).
+- **`scripts/start-qwen36-mtp.sh`** — Qwen3.6-27B with mainline llama.cpp + MTP draft heads on `:10502`. `make start-qwen36-mtp`. Mainline pinned at HEAD with MTP merged.
+- **Froggeric Qwen-Fixed-Chat-Templates v19** applied to all Qwen 3.5 / 3.6 aliases via `chat_template_flags` helper in `_common.sh`. Fixes empty-think poisoning, KV-cache invalidation, tool-call XML parsing, legacy-engine `loop.previtem` crashes.
+
+### Docs
+
+- `docs/mcp-integration.md` — full plan, three live-discovered gotchas, Quickstart, security notes.
+- `docs/benchmarking-discipline.md` — rules + the failed-comparison case study.
+- `docs/offline-mode.md` — MCP opt-in trade-off section.
+- `docs/usage.md` — MCP workflow + bench-tui workflow recipes.
+- `SECURITY.md` — clarifies the offline contract is `MCP_PROXY` unset.
+- README — Python venv quickstart for `bench-tui`, MCP make targets.
 
 ### Fixed
 

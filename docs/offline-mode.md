@@ -1,6 +1,6 @@
 # Running fully offline — and why LM Studio breaks
 
-Goal: chat with Qwen 3.6 with **Wi-Fi off, Ethernet unplugged, in a Faraday cage** — and have it just work.
+Goal: chat with Qwen3.8 with **Wi-Fi off, Ethernet unplugged, in a Faraday cage** — and have it just work.
 
 ## Why LM Studio fails when you disconnect
 

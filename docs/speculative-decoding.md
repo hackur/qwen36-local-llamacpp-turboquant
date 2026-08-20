@@ -10,6 +10,18 @@ is high, the target produces several tokens per forward — its
 memory-bandwidth cost amortizes across them — without changing what the
 target itself would have generated.
 
+## Default path: Qwen3.8 embedded MTP
+
+Qwen3.8 already contains its own multi-token-prediction draft head, so the primary launcher needs no second model:
+
+```bash
+make start
+# equivalent flags:
+# --spec-type draft-mtp --spec-draft-n-max 3 --spec-draft-p-min 0.5
+```
+
+This is enabled automatically for `qwen38-27b`. On the M3 Max it measured 24.60 tok/s versus 11.90 tok/s with `MTP=0`. Disable it only for an A/B test: `MTP=0 make start`. Vision keeps MTP off by default because that combined path has less production mileage than text-only MTP.
+
 ## Built-in draft alias
 
 The simplest path: use the `qwen3.5-0.8b` alias that ships with the repo (Qwen

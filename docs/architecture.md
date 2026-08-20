@@ -3,9 +3,9 @@
 Two parallel inference paths against the same GGUF on disk, fronted by an OpenAI-compatible HTTP server. A/B-bench them, route real traffic to the winner.
 
 ```
-                                   ┌─ ~/.lmstudio/models/.../Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M.gguf (19.5 GB, dense 27B — primary)
-        GGUF on disk  ─────────────┤  ~/.lmstudio/models/.../Qwen3.6-35B-A3B-Q6_K.gguf                    (28.5 GB, MoE 35B/3B-active — fallback)
-                                   └─ mmproj-*.gguf                                                       (vision projector, optional)
+                                   ┌─ ~/.lmstudio/models/.../Qwen3.8-27B-Q8_0.gguf (27.1 GiB, dense 27B — primary)
+        GGUF on disk  ─────────────┤  ~/.lmstudio/models/.../Qwen3.6-35B-A3B-Q6_K.gguf (28.5 GB, MoE — fallback)
+                                   └─ mmproj-Qwen3.8-27B-BF16.gguf (0.87 GiB, vision projector)
 
                                    ┌─ vendor/llama.cpp-mainline (master)        ── Metal, f16 KV     ─ port 10500  baseline
         Inference engine  ─────────┤
@@ -30,7 +30,11 @@ The TurboQuant fork drifts from upstream slowly. Keeping a stock mainline build 
 
 ## Default vs fallback model
 
-`scripts/_common.sh` now sets `MODEL_PRIMARY=qwen36-neo` (Qwen3.6-27B Heretic NEO-CODE Q5_K_M, dense). The 35B-A3B MoE GGUF shown above is the **fallback** — kept wired up for A/B comparisons and as a quality reference. KV-cache numbers in the table below are for the 35B-A3B; for qwen36-neo see `docs/kv-cache-math.md`.
+`scripts/_common.sh` sets `MODEL_PRIMARY=qwen38-27b` (Qwen3.8-27B Q8_0,
+dense VLM) and `MODEL_FALLBACK=qwen36-35b`. The default TurboQuant launcher
+uses Qwen3.8's native 262K context and embedded MTP head. Vision uses the same
+weights and projector but leaves MTP off by default because that combined path
+has less production mileage than text-only MTP.
 
 ## KV cache options ranked for this hardware
 
@@ -49,8 +53,10 @@ Numbers approximate — depends on n_kv_head, head dim, layer count, and turbo3 
 
 - macOS + system: ~6 GB
 - LM Studio idle: ~1 GB
-- Q6_K weights (mmap): ~28.5 GB (35B-A3B fallback)
+- Q8_0 weights + BF16 projector (mmap): ~28 GB (Qwen3.8 primary)
 - Compute graph + scratch: ~2–4 GB
 - → KV cache budget: **~25 GB** before paging
 
-For the 35B-A3B, the model's `n_ctx_train = 262 144` caps practical use long before 25 GB of KV does — at 20 KiB/tok f16, 256K context is only ~5 GB. The full training window fits comfortably with any KV type (estimate — measurement pending for q8_0/q4_0/turbo2 ceilings).
+Qwen3.8's full 262K window was live-tested at roughly 34.5 GiB process RSS.
+TurboQuant rewrites the requested turbo3/turbo3 combination to effective
+q8_0/turbo3 for this model's 24:4 GQA layout, preserving key-cache quality.

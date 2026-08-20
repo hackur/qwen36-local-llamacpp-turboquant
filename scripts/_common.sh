@@ -2,13 +2,15 @@
 # Shared env for start scripts.
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Primary alias — Qwen 3.6 27B Heretic-Uncensored NEO-CODE Q5_K_M (~19.5 GB dense, 256K n_ctx_train).
-# Resolves to ./models/qwen36-neo.gguf via symlink-models.sh.
-MODEL_PRIMARY="$REPO/models/qwen36-neo.gguf"
-MMPROJ_PRIMARY="$REPO/models/qwen36-neo.mmproj.gguf"
+# Primary alias — Qwen 3.8 27B Q8_0 (dense native VLM, 262K context, embedded MTP).
+# Resolves to ./models/qwen38-27b.gguf via symlink-models.sh.
+MODEL_PRIMARY_ALIAS="qwen38-27b"
+MODEL_PRIMARY="$REPO/models/$MODEL_PRIMARY_ALIAS.gguf"
+MMPROJ_PRIMARY="$REPO/models/qwen38-27b.mmproj.gguf"
 
 # Fallback — Qwen3.6-35B-A3B Q6_K (MoE, prior default). 27B IQ2_XXS still available as `qwen36-27b`.
-MODEL_FALLBACK="$REPO/models/qwen36-35b.gguf"
+MODEL_FALLBACK_ALIAS="qwen36-35b"
+MODEL_FALLBACK="$REPO/models/$MODEL_FALLBACK_ALIAS.gguf"
 MMPROJ_FALLBACK="$REPO/models/qwen36-35b.mmproj.gguf"
 
 # resolve_model <alias-or-path>
@@ -49,7 +51,7 @@ list_aliases() {
 SAMPLING=(--temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0)
 
 # Common server args.
-# --jinja enables Qwen 3.6's chat template (which supports the
+# --jinja enables Qwen's chat template (which supports the
 # `chat_template_kwargs.enable_thinking` flag clients pass per-request).
 # --reasoning-format none keeps thinking content inline so callers see it
 # even when default-on; clients can flip it off per-request.
@@ -156,7 +158,7 @@ apply_kv_split() {
 # memory-preflight:v1 — abort if model + optional mmproj + KV/scratch + other
 # already-running llama-server RSS + 4 GiB headroom would exceed physical RAM.
 # Originally inline in start-vision.sh; lifted here so big text-only aliases
-# (e.g. qwen36-35b at 256K) can opt in via MEMORY_PREFLIGHT=1.
+# (e.g. qwen38-27b at 256K) can opt in via MEMORY_PREFLIGHT=1.
 # Usage: preflight_memory <model_path> [mmproj_path]
 # Override with FORCE=1.
 preflight_memory() {

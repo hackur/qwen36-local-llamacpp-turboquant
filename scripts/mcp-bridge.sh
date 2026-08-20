@@ -8,6 +8,17 @@
 #   scripts/mcp-bridge.sh time          # time server, port 4002
 #   scripts/mcp-bridge.sh git           # git server (sandboxed to $REPO), port 4003
 #   MCP_PORT=4099 scripts/mcp-bridge.sh fs   # custom port
+#   MCP_CORS=http://127.0.0.1:10500 scripts/mcp-bridge.sh fs   # custom CORS origin
+#
+# Env:
+#   MCP_PORT  override bridge listen port (default per-server: fs=4001/time=4002/git=4003)
+#   MCP_CORS  Access-Control-Allow-Origin for the bridge. Default auto-detects a
+#             running llama-server on 10500/10501/10502 — if exactly one is
+#             listening, that port wins; otherwise (none or multiple)
+#             falls back to http://127.0.0.1:10501 (and prints a stderr note
+#             when the choice is ambiguous). Override with MCP_CORS=… when
+#             running on a non-default port, or set MCP_CORS=* for any origin
+#             (not recommended).
 #
 # Then in the WebUI: Settings → MCP → Add New Server → http://127.0.0.1:<port>/mcp
 # (Streamable HTTP transport — the WebUI's only supported MCP transport.)
@@ -43,7 +54,7 @@ case "$NAME" in
     LABEL="git ($REPO)"
     ;;
   ""|-h|--help)
-    sed -n '2,15p' "$0"; exit 0
+    sed -n '2,25p' "$0"; exit 0
     ;;
   *)
     echo "❌ unknown server '$NAME'. Try: fs | time | git" >&2; exit 1
@@ -61,6 +72,19 @@ echo "  Ctrl-C to stop."
 # --cors so the llama.cpp WebUI (different origin) can connect directly.
 # Locked to the llama-server origin; override with MCP_CORS=* for broader access.
 # Streamable HTTP is the only MCP transport the WebUI accepts.
+if [[ -z "${MCP_CORS:-}" ]]; then
+  MATCHES=()
+  for p in 10500 10501 10502; do
+    if lsof -nP -iTCP:"$p" -sTCP:LISTEN -t >/dev/null 2>&1; then
+      MATCHES+=( "$p" )
+    fi
+  done
+  if (( ${#MATCHES[@]} == 1 )); then
+    MCP_CORS="http://127.0.0.1:${MATCHES[0]}"
+  elif (( ${#MATCHES[@]} > 1 )); then
+    echo "⚠  multiple llama-servers listening (${MATCHES[*]}); defaulting CORS to :10501. Set MCP_CORS=… to override." >&2
+  fi
+fi
 CORS_ORIGIN="${MCP_CORS:-http://127.0.0.1:10501}"
 exec npx -y supergateway \
   --stdio "$STDIO" \

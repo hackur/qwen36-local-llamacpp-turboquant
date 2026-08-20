@@ -204,7 +204,7 @@ draw() {
 
   # ── LAUNCHD ────────────────────────────────────────────────────────────
   hdr "LAUNCHD"
-  local ld; ld=$(launchctl list 2>/dev/null | grep "com.local.qwen3-6.turboquant" || true)
+  local ld; ld=$(launchctl list 2>/dev/null | grep "com.local.qwen3-8.turboquant" || true)
   if [[ -n "$ld" ]]; then
     local ld_pid ld_status ld_label
     read -r ld_pid ld_status ld_label <<< "$ld"

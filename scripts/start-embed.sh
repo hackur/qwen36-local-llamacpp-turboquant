@@ -15,6 +15,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_common.sh"
 
+DRY_RUN=0
+if [[ "${1:-}" == "--dry-run" ]]; then
+  DRY_RUN=1
+  shift
+fi
+
 PORT="${PORT:-10510}"
 CTX="${CTX:-8192}"           # embedders are short-context by design
 KV="${KV:-f16}"              # tiny KV — no point quantizing
@@ -42,8 +48,10 @@ resolve_model "$MODEL_INPUT"
 MODEL="$RESOLVED_MODEL"
 ensure_model "$MODEL"
 load_model_defaults "$MODEL_INPUT"
-ensure_no_other_llama_server
-ensure_port_free "$PORT"
+if (( ! DRY_RUN )); then
+  ensure_no_other_llama_server
+  ensure_port_free "$PORT"
+fi
 mkdir -p "$REPO/logs"
 
 # mixed-kv-guard:v1 — derive KV_K / KV_V from KV (unless overridden) and warn on mismatch.
@@ -56,6 +64,21 @@ echo "  log   → $LOG"
 
 # Note: we do NOT pass ${SAMPLING[@]} — sampling is irrelevant for embeddings.
 # We also drop --jinja since embedders don't use chat templates.
+if (( DRY_RUN )); then
+  printf "dry-run:"
+  printf " %q" exec "$BIN" \
+    -m "$MODEL" \
+    --port "$PORT" \
+    --host 127.0.0.1 \
+    -c "$CTX" \
+    -ctk "$KV_K" -ctv "$KV_V" \
+    -ngl 99 -fa on -np 1 \
+    --embedding \
+    --alias embed
+  printf " 2>&1 | tee %q\n" "$LOG"
+  exit 0
+fi
+
 exec "$BIN" \
   -m "$MODEL" \
   --port "$PORT" \

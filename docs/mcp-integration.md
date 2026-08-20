@@ -1,8 +1,10 @@
 # MCP integration in the llama.cpp WebUI
 
-Investigation 2026-05-25. Live inspection of the running turboquant
-server at `http://127.0.0.1:10501/` + verification against the
-mainline llama-server `--help` output and upstream PR #18655.
+Investigation complete; integration shipping. Quickstart below is live —
+`MCP_PROXY=1 make start` plus one `make mcp-{fs,git,time}` bridge is the
+supported path. Open items tracked in `TODO.md` (P6.6 `audit-offline`
+regression test for accidental `MCP_PROXY=1` leakage; calibration on
+non-supergateway bridges).
 
 ## TL;DR
 
@@ -103,7 +105,13 @@ Gotchas if you hand-roll this:
   with `No 'Access-Control-Allow-Origin' header`. Lock it to the
   llama-server origin; don't open `*` unless you mean to.
 
-`scripts/mcp-bridge.sh` handles all three.
+`scripts/mcp-bridge.sh` handles all three. The `--cors` origin defaults
+to `http://127.0.0.1:10501` (the turboquant primary) but auto-detects a
+running llama-server on ports 10500/10501/10502/10503 (lowest wins) and
+honors `MCP_CORS=…` for custom origins — set this when bridging to the
+baseline server on `:10500` or a non-default port. `MCP_CORS=*` opens
+the bridge to any origin and is not recommended. Run `scripts/mcp-bridge.sh --help`
+for the full env list.
 
 ## Security / offline notes
 

@@ -6,9 +6,9 @@
       "name": "Local llama.cpp (turboquant)",
       "options": { "baseURL": "http://127.0.0.1:10501/v1" },
       "models": {
-        "qwen3.6-turboquant": {
-          "name": "Qwen3.6 (primary) · turbo3 KV · 128K",
-          "limit": { "context": 131072, "output": 32000 }
+        "qwen3.8-turboquant": {
+          "name": "Qwen3.8-27B Q8 (primary) · TurboQuant + MTP · 262K",
+          "limit": { "context": 262144, "output": 32000 }
         }
       }
     },
@@ -17,13 +17,13 @@
       "name": "Local llama.cpp (baseline)",
       "options": { "baseURL": "http://127.0.0.1:10500/v1" },
       "models": {
-        "qwen3.6-baseline": {
-          "name": "Qwen3.6-35B-A3B Q6_K · f16 KV · 32K",
+        "qwen3.8-baseline": {
+          "name": "Qwen3.8-27B Q8 · f16 KV · 32K",
           "limit": { "context": 32768, "output": 16000 }
         }
       }
     }
   },
-  "model": "llama.cpp/qwen3.6-turboquant",
+  "model": "llama.cpp/qwen3.8-turboquant",
   "permission": { "*": "allow" }
 }

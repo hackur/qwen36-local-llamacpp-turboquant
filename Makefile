@@ -2,8 +2,8 @@
 SHELL := bash
 .DEFAULT_GOAL := help
 
-.PHONY: help build start start-baseline start-tiny start-nemotron start-crow \
-        start-gemma4-e4b start-qwen35-9b start-gpt-oss start-gemma4-26b start-qwen36-27b start-qwen36-neo start-qwen36-mtp start-journalist \
+.PHONY: help build upgrade start start-baseline start-tiny start-nemotron start-crow \
+        start-gemma4-e4b start-qwen35-9b start-gpt-oss start-gemma4-26b start-qwen38 start-vision start-qwen36-27b start-qwen36-neo start-qwen36-mtp start-journalist \
         start-embed \
         stop status info info-watch bench bench-suite bench-tui mcp-fs mcp-git mcp-time needle demo open preflight check \
         install-launchd uninstall-launchd clean audit-offline models \
@@ -15,6 +15,9 @@ help:
 
 build: ## Build mainline + TurboQuant llama.cpp (Metal). Idempotent.
 	./scripts/build-llama.sh
+
+upgrade: ## Update both engine branches to current tips and rebuild
+	./scripts/upgrade.sh
 
 preflight: ## Check tools, builds, and model symlinks without starting a server
 	./scripts/preflight.sh
@@ -30,6 +33,12 @@ start: ## Start TurboQuant server in background (port 10501)
 		./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 & \
 		echo "starting; log → logs/turboquant.log"; \
 	fi
+
+start-qwen38: start ## Start Qwen3.8-27B Q8 with TurboQuant + embedded MTP (current DEFAULT)
+
+start-vision: ## Start Qwen3.8 vision server without experimental MTP (port 10503)
+	@mkdir -p logs
+	MODEL=qwen38-27b ./scripts/start-vision.sh > logs/vision.log 2>&1 &
 
 start-baseline: ## Start mainline f16 baseline (port 10500)
 	@mkdir -p logs
@@ -70,7 +79,7 @@ start-qwen36-27b: ## Start Qwen 3.6 27B IQ2_XXS (~9 GB dense)
 	@mkdir -p logs
 	MODEL=qwen36-27b CTX=32768 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
 
-start-qwen36-neo: ## Start Qwen 3.6 27B NEO-CODE Heretic Q5_K_M (~19.5 GB dense, current DEFAULT)
+start-qwen36-neo: ## Start legacy Qwen 3.6 27B NEO-CODE Heretic Q5_K_M (~19.5 GB dense)
 	@mkdir -p logs
 	MODEL=qwen36-neo ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
 
@@ -135,12 +144,16 @@ open: ## Open the web demo in your browser
 	open clients/web-demo.html
 
 install-launchd: ## Install launchd auto-start (always-on offline)
+	launchctl unload ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist 2>/dev/null || true
+	rm -f ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
 	sed "s|__REPO__|$(CURDIR)|g" configs/launchd-plist.template \
-		> ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
-	launchctl load ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
+		> ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
+	launchctl load ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
 	@echo "✓ installed. server will start at login. status: launchctl list | grep qwen"
 
 uninstall-launchd: ## Remove launchd auto-start
+	launchctl unload ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist 2>/dev/null || true
+	rm -f ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
 	launchctl unload ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist 2>/dev/null || true
 	rm -f ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
 	@echo "✓ uninstalled"

@@ -38,6 +38,7 @@ done
 
 # alias  weight-source-relpath                                                                              mmproj-source-relpath (or "" if none)
 MODELS=(
+  "qwen38-27b   lmstudio-community/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q8_0.gguf                                                   lmstudio-community/Qwen3.8-27B-GGUF/mmproj-Qwen3.8-27B-BF16.gguf"
   "qwen36-neo   DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M.gguf  DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/mmproj-F32.gguf"
   "qwen36-35b   lmstudio-community/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-Q6_K.gguf                                       lmstudio-community/Qwen3.6-35B-A3B-GGUF/mmproj-Qwen3.6-35B-A3B-BF16.gguf"
   "qwen36-27b   unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-IQ2_XXS.gguf                                                    unsloth/Qwen3.6-27B-GGUF/mmproj-F32.gguf"
@@ -67,6 +68,8 @@ for entry in "${MODELS[@]}"; do
     ok=$((ok+1))
   else
     printf "  %-13s (skip — not in LM Studio: %s)\n" "$alias" "$weight"
+    [[ -L "$REPO/models/$alias.gguf" ]] && run rm -f "$REPO/models/$alias.gguf"
+    [[ -L "$REPO/models/$alias.mmproj.gguf" ]] && run rm -f "$REPO/models/$alias.mmproj.gguf"
     missing=$((missing+1))
     continue
   fi

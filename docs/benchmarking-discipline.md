@@ -73,6 +73,67 @@ Two harnesses, same discipline:
 The TUI never starts/stops llama-servers itself — that's deliberate.
 You control thermal pacing by bringing each side up between job phases.
 
+## Runner protocol (source of truth)
+
+This section is the integration contract between `scripts/bench_runner.py`
+(producer) and `scripts/bench_tui.py` (consumer). Both files are
+append-only JSONL, UTF-8, one event per line, ISO-8601 UTC timestamps.
+Agents must not negotiate the schema — change it here first, then code.
+
+### Run directory layout
+
+Each invocation creates a fresh run directory under `benchmarks/runs/`:
+
+```
+benchmarks/runs/<run-id>/
+  events.jsonl     # runner writes, TUI reads (tail -f style)
+  control.jsonl    # TUI writes, runner reads between runs
+  summary.json     # runner writes once at end
+  <job-id>.json    # per-job raw timing records
+```
+
+`<run-id>` is `YYYYMMDD-HHMMSS`.
+
+### events.jsonl (runner -> TUI)
+
+One status event per line. Per-run sample and per-job completion events:
+
+```json
+{"ts":"2026-05-25T18:00:00Z","job":"turboquant-vs-mtp","phase":"running","side":"A","run":3,"tok_s":61.4}
+{"ts":"2026-05-25T18:01:30Z","job":"turboquant-vs-mtp","phase":"ok","summary":{"a":{"median":61.5,"min":60.2,"max":62.1},"b":{"median":15.4,"min":14.9,"max":16.0}}}
+```
+
+`phase` is a closed set: `queued`, `waiting_port`, `warming`, `running`,
+`ok`, `failed`, `skipped`, `stopped`. No other values are valid.
+
+### control.jsonl (TUI -> runner)
+
+The runner reads new lines between every run iteration:
+
+```json
+{"action":"stop","job":"<id>"}
+{"action":"skip","job":"<id>"}
+{"action":"start","job":"<id>"}
+```
+
+`stop` aborts the named job and marks it `stopped`; `skip` marks a queued
+job `skipped` without running; `start` promotes a queued job to the front
+of the queue. The TUI never mutates `events.jsonl` — runner is the single
+source of truth.
+
+### One bench at a time
+
+The runner holds an exclusive lockfile at `benchmarks/runs/.bench.lock`
+and refuses to start while another runner holds it. Within a job, if both
+A and B ports listen simultaneously, the runner reports `waiting_port` and
+polls — it will never time both sides concurrently. This preserves the
+thermal rule on M3 Max.
+
+### TUI keybinds
+
+Navigation and control glyphs are documented in `scripts/bench_tui.py`
+(run with `--help` or read the top-of-file docstring).
+
 ## Pattern to watch
 
 The instinct is to *do* (refactor, wire, ship) and then report a number

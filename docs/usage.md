@@ -17,7 +17,7 @@ Decide by **memory budget** first, **task** second.
 
 | You have… | Use |
 |---|---|
-| 64 GB RAM, want uncensored + code-tuned, **256K context** | `qwen36-neo` (default) |
+| 64 GB RAM, want the best all-purpose local model, vision, and **262K context** | `qwen38-27b` (default) |
 | 64 GB RAM, want highest gen tok/s on long context | `qwen36-35b` (now fallback; MoE, **256K** native, ~5.3 KiB/tok turbo3) |
 | 64 GB RAM, want a Gemma flavor for variety | `gemma4-26b` |
 | 64 GB RAM, want OpenAI-style behavior | `gpt-oss-20b` |
@@ -25,7 +25,7 @@ Decide by **memory budget** first, **task** second.
 | 16 GB RAM | `nemotron-4b` |
 | Battery life mode / quick smoke test | `tiny` |
 | Speculative-decoding draft / cold-start / battery mode | `qwen3.5-0.8b` |
-| Vision (images) on a heavy model | `qwen36-neo`, `qwen36-35b`, or `gemma4-26b` |
+| Vision (images) on a heavy model | `qwen38-27b` (default) or `gemma4-26b` |
 | Vision on a small model | `qwen35-9b` (best quality) or `gemma4-e4b` |
 
 `make models` shows what's installed.
@@ -36,17 +36,24 @@ Decide by **memory budget** first, **task** second.
 
 Each recipe shows: how to start, the right `KV`/`CTX`, the model's strengths, a sample prompt, and the actual reply you should see.
 
-### `qwen36-neo` — default (Qwen 3.6 27B Heretic-Uncensored NEO-CODE Q5_K_M, dense)
+### `qwen38-27b` — default (Qwen3.8-27B Q8_0, dense VLM)
 
 **Start:**
 ```bash
 make start                              # uses turbo3, defaults from start-turboquant.sh
-# equivalent: MODEL=qwen36-neo KV=turbo3 ./scripts/start-turboquant.sh
+# equivalent: MODEL=qwen38-27b ./scripts/start-turboquant.sh
 ```
 
-**Strengths:** Uncensored + code-tuned dense 27B at Q5_K_M. **Native 256K context** (`n_ctx_train = 262144`, no rope-scaling). Hybrid Qwen3.6 architecture — 16 of 64 layers carry KV — keeps the KV cache small (15.2 KiB/tok at turbo3, ~22.7 GB total VRAM at 256K). Vision-capable via `mmproj`. See [`benchmarks/SWEEP.md`](../benchmarks/SWEEP.md#qwen36-neo-qwen36-27b-heretic-neo-code-q5_k_m) for sustained throughput numbers.
+**Strengths:** Highest practical quant for this 64 GB machine, native 262K
+context, built-in vision, and embedded MTP speculative decoding. The current
+TurboQuant build measured 24.6 tok/s with MTP and loads the full context in
+about five seconds when warm. Set `MTP=0` for a control run. Use
+`make start-vision` for images; vision deliberately keeps MTP off by default.
 
-**Tradeoff vs the prior `qwen36-35b` MoE default:** ~14 tok/s @ 128K (dense Q5) vs ~63 tok/s @ 64K (MoE Q6 with ~3B active params). Slower per token, but 4× the trained context, uncensored, and code-tuned.
+### `qwen36-neo` — legacy uncensored/code-tuned fallback
+
+The old Qwen3.6 NEO-CODE alias is retained when its behavior is specifically
+useful, but it is no longer the primary launch path.
 
 ### `qwen36-35b` — fallback (Qwen 3.6 35B-A3B MoE)
 
@@ -404,7 +411,9 @@ curl -s http://127.0.0.1:10501/v1/chat/completions \
   | jq -r '.choices[0].message.content'
 ```
 
-For prompts above ~50 K tokens, `qwen36-neo` (256K trained, default) and `qwen36-35b` (256K trained, fallback) are the only models with the trained context. For 8K–32K, any model works.
+For prompts above ~50 K tokens, `qwen38-27b` (262K trained, default),
+`qwen36-neo`, and `qwen36-35b` (fallback) have the trained context. For
+8K–32K, any model works.
 
 **Verify it actually used the long context:**
 ```bash

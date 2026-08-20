@@ -1,6 +1,6 @@
 # Offline-mode validation
 
-The whole point: this stack must keep serving Qwen 3.6 with **no network**. Procedure to prove it.
+The whole point: this stack must keep serving Qwen3.8 with **no network**. Procedure to prove it.
 
 ## Procedure
 

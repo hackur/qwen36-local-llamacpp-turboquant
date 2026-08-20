@@ -1,23 +1,22 @@
 # Upstream Tracking
 
-Read-only audit of the two llama.cpp forks vendored in this repo, plus the
-known upstream-blocked issues that force `tiny` and `gpt-oss-20b` onto
-`q8_0` KV instead of `turbo3`.
+The two inference engines vendored in this repo are kept on their current
+upstream branches and rebuilt together by `make upgrade`. The accepted
+revisions live in `configs/upstream.env` so the working stack is reproducible.
 
-**Last checked:** 2026-05-07 (no network — git-only audit)
+**Last checked:** 2026-08-20 (network fetch, clean rebuild, Qwen3.8 live test)
 
 ## Forks we care about
 
 | Fork | Path | Branch | Pinned commit | Commit date | Subject |
 |---|---|---|---|---|---|
-| TurboQuant (TheTom) | `vendor/llama-cpp-turboquant/` | `feature/turboquant-kv-cache` | `11a241d` | 2026-04-24 | Merge PR #105 — `cuda: disable sparse V skip (warp divergence regression)` |
-| llama.cpp mainline | `vendor/llama.cpp-mainline/` | `master` | `683c5acb9` | 2026-04-29 | `spec : disacard last drafted token with low prob (#22506)` |
+| TurboQuant (TheTom) | `vendor/llama-cpp-turboquant/` | `feature/turboquant-kv-cache` | `bd1bf025fc55ffa1fcb2ba6d8bb8805f35671d1f` | 2026-08-19 | current branch tip |
+| llama.cpp mainline | `vendor/llama.cpp-mainline/` | `master` | `681c29d36a13be54d317ee147b272da9163dbef3` | 2026-08-20 | current branch tip |
 
-The TurboQuant fork's most recent upstream sync is `67559e5 Upstream sync to
-b8871 (64 commits)` — so it lags mainline by roughly the commits between
-`b8871` and `683c5acb9` (a few weeks of mainline activity at the time of this
-check; the actively-developed path on the fork is CUDA, per its recent
-history).
+This TurboQuant revision loads Qwen3.8, supports its embedded MTP head via
+`--spec-type draft-mtp`, supports the vision projector, and exposes turbo2/3/4
+KV types. The April 2026 revision previously pinned here could not load the
+model because it treated Qwen3.8's MTP layer as an ordinary transformer block.
 
 ## Known issues affecting us
 
@@ -50,25 +49,16 @@ turbo3` is requested. They are documented in
   git -C vendor/llama-cpp-turboquant log --grep='mxfp4\|MXFP4' --oneline | head -5
   ```
 
-## Quarterly recheck
+## Updating both engines
 
 When you want to test whether the fork can drop these q8_0 pins:
 
 ```bash
-# 1. Pull latest TurboQuant + mainline (network required at this step only)
-git -C vendor/llama-cpp-turboquant fetch origin && \
-git -C vendor/llama-cpp-turboquant log --oneline HEAD..origin/feature/turboquant-kv-cache | head -40
-git -C vendor/llama.cpp-mainline    fetch origin && \
-git -C vendor/llama.cpp-mainline    log --oneline HEAD..origin/master | head -40
-
-# 2. If anything looks promising, rebuild then probe both blocked models
-#    with KV=turbo3 (override the per-alias q8_0 pin):
-make build
-MODEL=tiny        KV=turbo3 ./scripts/start-turboquant.sh > logs/probe-tiny.log        2>&1 &
-MODEL=gpt-oss-20b KV=turbo3 ./scripts/start-turboquant.sh > logs/probe-gpt-oss-20b.log 2>&1 &
-
-# 3. Success = server reaches "HTTP server listening" and a /v1/chat/completions
-#    round-trip returns 200 without "Abort trap: 6" in the log. If both pass,
-#    flip KV from q8_0 -> turbo3 in configs/model-defaults.env for those two
-#    aliases and update "Last checked" at the top of this doc.
+make upgrade
 ```
+
+The upgrade script refuses dirty vendor checkouts, resets each vendor directory
+to its configured upstream branch tip, rebuilds both engines, and prints the
+verified revisions. Update `configs/upstream.env` only after the live smoke tests
+pass. The vendor branches are engine implementation details; the parent project
+has one canonical branch, `main`.

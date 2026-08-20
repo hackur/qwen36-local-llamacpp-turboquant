@@ -6,7 +6,7 @@ source "$SCRIPT_DIR/_common.sh"
 
 PORT="${PORT:-10500}"
 CTX="${CTX:-32768}"
-MODEL_INPUT="${MODEL:-$MODEL_PRIMARY}"
+MODEL_INPUT="${MODEL:-$MODEL_PRIMARY_ALIAS}"
 BIN="$REPO/vendor/llama.cpp-mainline/build/bin/llama-server"
 LOG="$REPO/logs/baseline.log"
 
@@ -33,5 +33,5 @@ exec "$BIN" \
   "${SAMPLING[@]}" \
   ${TEMPLATE_FLAGS[@]+"${TEMPLATE_FLAGS[@]}"} \
   ${MCP_FLAGS[@]+"${MCP_FLAGS[@]}"} \
-  --alias qwen3.6-baseline \
+  --alias qwen3.8-baseline \
   2>&1 | tee "$LOG"

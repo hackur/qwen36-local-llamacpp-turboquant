@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key>           <string>com.local.qwen3-6.turboquant</string>
+  <key>Label</key>           <string>com.local.qwen3-8.turboquant</string>
   <key>ProgramArguments</key>
   <array>
     <string>__REPO__/scripts/start-turboquant.sh</string>
@@ -24,10 +24,10 @@ Placeholders:
   <USER>     your macOS short username — only relevant inside __REPO__ if it lives under /Users/<USER>/
 
 Install:
-  sed "s|__REPO__|$(pwd)|g" configs/launchd-plist.template > ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
-  launchctl load ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
+  sed "s|__REPO__|$(pwd)|g" configs/launchd-plist.template > ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
+  launchctl load ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
 
 Uninstall:
-  launchctl unload ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
-  rm ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
+  launchctl unload ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
+  rm ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
 -->

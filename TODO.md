@@ -226,9 +226,13 @@ preserved when the opt-in is off.
       `make audit-mcp-off` that asserts: with `MCP_PROXY` unset,
       llama-server holds exactly one localhost socket, zero outbound
       attempts during a 30-s WebUI session.
-- [ ] **P6.8 — README cross-link** + `docs/usage.md` blurb explaining
+- [x] **P6.8 — README cross-link** + `docs/usage.md` blurb explaining
       the opt-in and the **confirmed** offline trade-off (cite the
-      favicon-leak observation from the smoke test).
+      favicon-leak observation from the smoke test). README "Since
+      v0.0.2" + "What can you do" rows + Quickstart venv note added;
+      `docs/usage.md` has a "Tool use via MCP in the WebUI" workflow;
+      `docs/offline-mode.md` MCP trade-off section; `SECURITY.md`
+      scope clarified.
 
 ## P7 - Hygiene, safeguards & known bugs
 
@@ -275,38 +279,61 @@ real.
 
 ### Bugs (verified)
 
-- [ ] **`scripts/start-fallback.sh` does not apply `chat_template_flags`.**
+- [x] **`scripts/start-fallback.sh` does not apply `chat_template_flags`.**
       All other `start-*.sh` for Qwen aliases pull in the froggeric v19
       template via `TEMPLATE_FLAGS=( $(chat_template_flags "$MODEL_INPUT") )`;
       `start-fallback.sh` only passes `--jinja` and so falls back to the
       model's embedded template. Re-introduces the empty-think /
       KV-cache-invalidation / tool-call XML bugs the v19 template fixed.
       Fix: mirror the wiring from `start-baseline.sh` (lines around 20).
-- [ ] **`scripts/bench-ab.sh` median function silently returns 0 on empty
+- [x] **`scripts/bench-ab.sh` median function silently returns 0 on empty
       input.** `median()` at line ~57 (`sort -n | awk ... print (NR%2 ? ...
       : ...)`) does not check `NR == 0`. If every curl in a side fails (server
       down, network hiccup mid-suite), the side reports `0.00 tok/s` instead
       of failing loudly. Fix: emit a marker like `ERROR` when `NR == 0`, and
       have callers treat it as job failure.
-- [ ] **`scripts/bench_suite.py` validator does not catch same-port A/B
+- [x] **`scripts/bench_suite.py` validator does not catch same-port A/B
       collisions.** A suite job with `a.port == b.port` validates clean,
       then deadlocks at runtime under the runner's "only one of A/B may
       listen" rule (status stays `waiting_port` forever). Add a
       validation check that `a.port != b.port`.
-- [ ] **`scripts/bench_suite.py merge_defaults` doesn't resolve
+- [x] **`scripts/bench_suite.py merge_defaults` doesn't resolve
       `prompt_file`.** Per-job `prompt_file` overrides are not opened or
       validated at load time; failure surfaces at runtime as a file-open
       error mid-job. Either resolve and inline at validate time, or fail
       validation on missing path.
+- [x] **`scripts/bench_runner.py` lockfile not released on crash.**
+      Fixed: `atexit` close+unlink registered after lock acquire;
+      SIGINT/SIGTERM handlers raise SystemExit so atexit fires.
+      `--dry-run` continues to skip the lockfile entirely.
+- [x] **`scripts/bench_runner.py` control-offset write is not atomic.**
+      Fixed: `Control.drain` now writes `<path>.tmp` then
+      `os.replace()` for atomic rename.
+- [x] **`scripts/bench_tui.py tail_events` FD leak on exception.**
+      Fixed: exception path closes the existing handle (guarded) and
+      sets it to `None` before the sleep+reopen retry.
+- [x] **`scripts/bench_tui.py _prefill_from_suite` swallows YAML
+      errors.** Fixed: malformed YAML now queues a `[warning] suite
+      load failed: <class>: <msg>` line to the RichLog via
+      `call_after_refresh` (safe before mount) and continues fallback.
+- [x] **`scripts/bench-ab.sh server_meta` swallows jq errors.** Fixed:
+      branches on curl exit, only runs jq if body starts with `{`,
+      emits `(meta unavailable: curl=<code>|non-JSON|jq parse error)`.
+      Bonus: `bench_one` now logs `run N: FAILED` for per-run curl
+      failures and skips the side entirely when no runs succeeded
+      (was previously reporting `0.00 tok/s`).
+- [x] **`scripts/needle.py` no argparse bounds.** Fixed: switched to
+      `argparse` with `type=` validators for `target>=1`,
+      `port∈1..65535`, `depth∈0..100`. Positional order preserved.
 
 ### Incomplete / undocumented (verified)
 
-- [ ] **`start-vision.sh`, `start-embed.sh` lack `--dry-run` support.**
+- [x] **`start-vision.sh`, `start-embed.sh` lack `--dry-run` support.**
       The other four `start-*.sh` honor `--dry-run` to print the command
       without launching, used in CI and CONTRIBUTING.md examples. These
       two diverge. Fix: copy the `DRY_RUN` parsing block from
       `start-turboquant.sh`.
-- [ ] **`scripts/mcp-bridge.sh` CORS_ORIGIN defaults to `:10501`
+- [x] **`scripts/mcp-bridge.sh` CORS_ORIGIN defaults to `:10501`
       (turboquant) only.** Users running baseline on `:10500` + MCP must
       set `MCP_CORS=http://127.0.0.1:10500`; not mentioned in the
       bridge's `--help` or `docs/mcp-integration.md`. Either document or
@@ -319,31 +346,31 @@ real.
 
 ### Docs (verified gaps)
 
-- [ ] **`README.md` "What can you do with this?" omits TUI and MCP.**
+- [x] **`README.md` "What can you do with this?" omits TUI and MCP.**
       Section at line ~66 lists `make bench`, proxy, demo — not
       `make bench-tui` / `make bench-suite` / `make mcp-fs`. New users
       can't discover P5/P6 from the front page.
-- [ ] **`README.md` "All targets" list (line ~106) is stale.** Doesn't
+- [x] **`README.md` "All targets" list (line ~106) is stale.** Doesn't
       mention `bench-tui`, `bench-suite`, `mcp-fs`, `mcp-git`,
       `mcp-time`. Likely out of sync with `Makefile` help output.
       Either regenerate from `make help`, or drop the list and
       cross-link `make help` instead.
-- [ ] **`README.md` "What's new in v0.0.2" trailer doesn't mention
+- [x] **`README.md` "What's new in v0.0.2" trailer doesn't mention
       anything since v0.0.2 (TUI, MCP, single-server guard).** Either
       retitle as "Highlights" with a CHANGELOG cross-link, or add a
       brief "Since v0.0.2" line. Whichever scales better — the trailer
       will rot otherwise.
-- [ ] **`CONTRIBUTING.md` has no guidance for bench-suite contributions.**
+- [x] **`CONTRIBUTING.md` has no guidance for bench-suite contributions.**
       Section at line ~59 only covers `bench-ab.sh` and the metadata-block
       requirement. Add a short pointer to `benchmarks/suites/*.yaml`,
       `scripts/bench_suite.py validate`, and the events/control JSONL
       protocol (or just link to TODO P5's "Protocol contract" block as
       the source of truth).
-- [ ] **`docs/benchmarking-discipline.md` doesn't document the P5 runner
+- [x] **`docs/benchmarking-discipline.md` doesn't document the P5 runner
       protocol.** Spec lives only in TODO.md P5. When P5 closes, the spec
       should migrate (events.jsonl/control.jsonl schemas, run-dir layout,
       phase state machine) so the roadmap can be pruned.
-- [ ] **`docs/mcp-integration.md` claim "Investigation complete" is
+- [x] **`docs/mcp-integration.md` claim "Investigation complete" is
       misleading.** P6.4 quickstart, P6.6 offline regression test, and
       P6.8 README cross-link are still open. Either soften the header to
       "Investigation complete; integration in progress" or close out the

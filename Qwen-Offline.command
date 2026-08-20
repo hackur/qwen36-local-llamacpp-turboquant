@@ -12,7 +12,7 @@ PORT=10501
 # Friendly error if the server crashes
 trap 'echo; echo "‼ Something went wrong. Press any key to close."; read -n 1 -s' ERR
 
-echo "⏳ Starting Qwen 3.6 (offline)…"
+echo "⏳ Starting Qwen 3.8 + TurboQuant MTP (offline)…"
 mkdir -p logs
 
 # Already up?
@@ -24,7 +24,7 @@ else
     read -n 1 -s
     exit 1
   fi
-  PORT=$PORT CTX=65536 KV=turbo3 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
+  PORT=$PORT ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
   echo "  log → $REPO/logs/turboquant.log"
   printf "  loading model"
   for i in $(seq 1 90); do

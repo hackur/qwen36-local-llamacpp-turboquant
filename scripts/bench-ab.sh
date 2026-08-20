@@ -49,12 +49,25 @@ wait_for_solo() {
 
 server_meta() {
   local port="$1" url="http://127.0.0.1:$port"
-  curl -sf "$url/props" 2>/dev/null \
-    | jq -r '"alias=\(.default_generation_settings.model // "?") ctx=\(.default_generation_settings.n_ctx // "?")"' \
-    || echo "alias=? ctx=?"
+  local body rc
+  body=$(curl -sf "$url/props" 2>/dev/null); rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "(meta unavailable: curl=$rc)"
+    return 0
+  fi
+  case "$body" in
+    '{'*) ;;
+    *) echo "(meta unavailable: non-JSON)"; return 0 ;;
+  esac
+  local out
+  if ! out=$(printf '%s' "$body" | jq -r '"alias=\(.default_generation_settings.model // "?") ctx=\(.default_generation_settings.n_ctx // "?")"' 2>/dev/null); then
+    echo "(meta unavailable: jq parse error)"
+    return 0
+  fi
+  echo "$out"
 }
 
-median() { sort -n | awk '{a[NR]=$1} END {print (NR%2 ? a[(NR+1)/2] : (a[NR/2]+a[NR/2+1])/2)}'; }
+median() { sort -n | awk '{a[NR]=$1} END {if (NR==0) print "ERROR"; else print (NR%2 ? a[(NR+1)/2] : (a[NR/2]+a[NR/2+1])/2)}'; }
 
 bench_one() {
   local port="$1" label="$2"
@@ -70,12 +83,20 @@ bench_one() {
 
   local tps_list=()
   for i in $(seq 1 "$N"); do
-    local r tps n
+    local r rc tps n
     r=$(curl -sf "$url/v1/chat/completions" -H "Content-Type: application/json" \
         -d "$(jq -nc --arg p "$PROMPT" --argjson mt "$MAX_TOKENS" \
-              '{model:"local",messages:[{role:"user",content:$p}],max_tokens:$mt,chat_template_kwargs:{enable_thinking:false}}')")
-    tps=$(echo "$r" | jq -r '.timings.predicted_per_second // 0')
-    n=$(echo "$r"   | jq -r '.timings.predicted_n // 0')
+              '{model:"local",messages:[{role:"user",content:$p}],max_tokens:$mt,chat_template_kwargs:{enable_thinking:false}}')") && rc=0 || rc=$?
+    if [ "$rc" -ne 0 ] || [ -z "$r" ] || [ "${r:0:1}" != "{" ]; then
+      printf "  run %d: FAILED (curl=%s)\n" "$i" "$rc"
+      continue
+    fi
+    tps=$(echo "$r" | jq -r '.timings.predicted_per_second // empty' 2>/dev/null)
+    n=$(echo "$r"   | jq -r '.timings.predicted_n // empty' 2>/dev/null)
+    if [ -z "$tps" ]; then
+      printf "  run %d: FAILED (no timings in response)\n" "$i"
+      continue
+    fi
     printf "  run %d: %7.2f tok/s  (%s tokens)\n" "$i" "$tps" "$n"
     tps_list+=("$tps")
     echo "$r" | jq -c --arg label "$label" --arg port "$port" --arg run "$i" \
@@ -83,9 +104,19 @@ bench_one() {
   done
 
   local med min max
-  med=$(printf "%s\n" "${tps_list[@]}" | median)
-  min=$(printf "%s\n" "${tps_list[@]}" | sort -n | head -1)
-  max=$(printf "%s\n" "${tps_list[@]}" | sort -n | tail -1)
+  if [ "${#tps_list[@]}" -eq 0 ]; then
+    med="ERROR"; min="ERROR"; max="ERROR"
+  else
+    med=$(printf "%s\n" "${tps_list[@]}" | median)
+    min=$(printf "%s\n" "${tps_list[@]}" | sort -n | head -1)
+    max=$(printf "%s\n" "${tps_list[@]}" | sort -n | tail -1)
+  fi
+  if [ "$med" = "ERROR" ] || [ "$min" = "ERROR" ] || [ "$max" = "ERROR" ] || [ -z "$med" ]; then
+    printf "  side %s failed: no successful runs (n=%d, max_tokens=%d)\n\n" \
+      "$label" "$N" "$MAX_TOKENS" >&2
+    # skip recording — don't pollute the summary table with a fake row
+    return 0
+  fi
   printf "  median %.2f  min %.2f  max %.2f  (n=%d, max_tokens=%d)\n\n" \
     "$med" "$min" "$max" "$N" "$MAX_TOKENS"
   # stash summary line for the final table
@@ -109,7 +140,11 @@ bench_one "$PORT_B" "$LABEL_B"
 echo "── summary ──"
 printf "  %-15s %-6s %8s %8s %8s\n" label port median min max
 while IFS='|' read -r l p med mn mx; do
-  printf "  %-15s %-6s %8.2f %8.2f %8.2f\n" "$l" "$p" "$med" "$mn" "$mx"
+  if [ "$med" = "ERROR" ] || [ "$mn" = "ERROR" ] || [ "$mx" = "ERROR" ]; then
+    printf "  %-15s %-6s %8s %8s %8s\n" "$l" "$p" "ERROR" "ERROR" "ERROR"
+  else
+    printf "  %-15s %-6s %8.2f %8.2f %8.2f\n" "$l" "$p" "$med" "$mn" "$mx"
+  fi
 done < "$OUT.summary"
 rm -f "$OUT.summary"
 echo

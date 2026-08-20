@@ -1,10 +1,11 @@
 # Multimodal (vision) — per-model recipes
 
-Seven models in this stack are vision-capable. Each ships with a matching `mmproj` file (vision projector) that gets symlinked alongside the weights:
+The default Qwen3.8 model and the legacy fallbacks are vision-capable. Each ships with a matching `mmproj` file that gets symlinked beside the weights:
 
 | Alias | mmproj quant | Size of mmproj | Notes |
 |---|---|---|---|
-| `qwen36-neo` | F32 | 1.8 GB | **default**, dense 27B Heretic NEO-CODE Q5_K_M |
+| `qwen38-27b` | BF16 | 0.87 GiB | **default**, dense Q8_0 VLM, native 262K |
+| `qwen36-neo` | F32 | 1.8 GB | legacy dense Heretic NEO-CODE fallback |
 | `qwen36-35b` | BF16 | 0.9 GB | MoE 35B-A3B (now fallback) |
 | `qwen36-27b` | F32 | 1.8 GB | dense 27B IQ2_XXS |
 | `gemma4-26b` | BF16 | 1.2 GB | Gemma 4 vision |
@@ -18,7 +19,7 @@ Seven models in this stack are vision-capable. Each ships with a matching `mmpro
 
 ```bash
 make stop                                     # vision needs its own server
-MODEL=qwen36-neo PORT=10503 ./scripts/start-vision.sh > logs/vision.log 2>&1 &
+make start-vision
 sleep 30                                      # ~30 s to load weights + mmproj on M3 Max
 ./scripts/test-vision.sh                      # generates a 32×32 PNG and asks for color
 ```
@@ -53,7 +54,15 @@ make stop
 MODEL=qwen35-9b PORT=10503 ./scripts/start-vision.sh > logs/vision.log 2>&1 &
 ```
 
-`MODEL=` accepts any of the seven vision aliases listed above. The script auto-finds the matching `<alias>.mmproj.gguf` next to the weights symlink.
+`MODEL=` accepts any listed vision alias. The script auto-finds the matching `<alias>.mmproj.gguf` next to the weights symlink.
+
+Qwen3.8 vision defaults to MTP off because the combined path has less
+production mileage than text-only MTP. The current fork logs non-consecutive
+token-position warnings during ordinary Qwen3.8 image ingestion even without
+MTP; the 2026-08-20 live test still identified the generated solid-red image
+correctly. Treat those lines as upstream log noise unless output quality is
+wrong. For an explicit MTP experiment:
+`MTP=1 MODEL=qwen38-27b ./scripts/start-vision.sh`.
 
 ## Two servers at once: text + vision
 
@@ -68,6 +77,7 @@ Don't try `qwen36-35b` text + `gemma4-26b` vision — combined 28 + 16 = 44 GB o
 
 The `mmproj` runs *in addition* to the LLM weights. Approximate at runtime:
 - Qwen 3.6 35B-A3B: weights 26.8 GB + mmproj ~2 GB = **~29 GB**
+- Qwen 3.8 27B: weights 27.1 GiB + mmproj 0.87 GiB, plus KV/scratch = **~34.5 GiB RSS at 262K**
 - Gemma 4 26B-A4B: weights ~16 GB + mmproj ~1.5 GB = **~18 GB**
 - Qwen 3.5 9B: weights ~9 GB + mmproj ~1 GB = **~10 GB**
 

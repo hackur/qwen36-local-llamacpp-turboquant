@@ -3,7 +3,37 @@
 Usage:  python3 scripts/needle.py <target_tokens> [<port>] [<depth_pct>]
   depth_pct: 50 (default) → middle, 5 → near start, 95 → near end
 """
-import json, sys, time, urllib.request
+import argparse, json, sys, time, urllib.request
+
+
+def _port(s):
+    try:
+        v = int(s)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"port must be an integer (got {s!r})")
+    if not 1 <= v <= 65535:
+        raise argparse.ArgumentTypeError(f"port must be in 1..65535 (got {v})")
+    return v
+
+
+def _depth(s):
+    try:
+        v = int(s)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"depth_pct must be an integer (got {s!r})")
+    if not 0 <= v <= 100:
+        raise argparse.ArgumentTypeError(f"depth_pct must be in 0..100 (got {v})")
+    return v
+
+
+def _target(s):
+    try:
+        v = int(s)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"target_tokens must be an integer (got {s!r})")
+    if v < 1:
+        raise argparse.ArgumentTypeError(f"target_tokens must be >= 1 (got {v})")
+    return v
 
 def call(port, prompt, max_tokens=80, timeout=600):
     body = json.dumps({
@@ -28,9 +58,18 @@ def server_ctx(port):
         return 0
 
 def main():
-    target = int(sys.argv[1]) if len(sys.argv) > 1 else 50_000
-    port   = int(sys.argv[2]) if len(sys.argv) > 2 else 10501
-    depth  = int(sys.argv[3]) if len(sys.argv) > 3 else 50
+    ap = argparse.ArgumentParser(
+        prog="needle.py",
+        description="Needle-in-haystack at long context.",
+    )
+    ap.add_argument("target", nargs="?", type=_target, default=50_000,
+                    help="target prompt size in tokens (default: 50000)")
+    ap.add_argument("port", nargs="?", type=_port, default=10501,
+                    help="llama-server port, 1..65535 (default: 10501)")
+    ap.add_argument("depth", nargs="?", type=_depth, default=50,
+                    help="needle depth percent, 0..100 (default: 50)")
+    args = ap.parse_args()
+    target, port, depth = args.target, args.port, args.depth
 
     # Clamp target to ~80% of server's loaded context (leave room for instructions + reply)
     loaded_ctx = server_ctx(port)

@@ -150,7 +150,9 @@ class BenchTUI(App):
                 continue
             try:
                 doc = yaml.safe_load(p.read_text()) or {}
-            except Exception:
+            except Exception as e:
+                msg = f"[warning] suite load failed: {type(e).__name__}: {str(e)[:80]}"
+                self.call_after_refresh(self._warn_log, msg)
                 continue
             group = doc.get("name") or p.stem
             defaults = doc.get("defaults") or {}
@@ -270,6 +272,12 @@ class BenchTUI(App):
                 self.handle_event(ev, log)
             except Exception as e:
                 log.write(f"[red]tail error: {e}[/red]")
+                if f is not None:
+                    try:
+                        f.close()
+                    except Exception:
+                        pass
+                    f = None
                 await asyncio.sleep(0.5)
 
     def handle_event(self, ev: dict, log: RichLog) -> None:
@@ -348,6 +356,13 @@ class BenchTUI(App):
             extra = " (done)"
         log.write(f"[dim]{ts}[/dim] [{color}]{phase:<13}[/{color}] {jid}{extra}")
         self.set_status()
+
+    def _warn_log(self, msg: str) -> None:
+        try:
+            log: RichLog = self.query_one("#log", RichLog)
+            log.write(f"[yellow]{msg}[/yellow]")
+        except Exception:
+            pass
 
     def _update_tree_label(self, jid: str) -> None:
         node = self.job_nodes.get(jid)

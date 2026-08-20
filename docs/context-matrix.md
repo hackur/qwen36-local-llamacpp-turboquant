@@ -1,6 +1,10 @@
 # Context-length matrix
 
-Current default per `scripts/_common.sh` is `MODEL_PRIMARY=qwen36-neo` (Qwen3.6-27B Heretic NEO-CODE Q5_K_M); **Qwen3.6-35B-A3B Q6_K is the fallback**. The matrix below covers the 35B-A3B fallback; for qwen36-neo, see the measured rows in `docs/kv-cache-math.md`.
+Current default per `scripts/_common.sh` is `MODEL_PRIMARY=qwen38-27b`
+(Qwen3.8-27B Q8_0); **Qwen3.6-35B-A3B Q6_K is the fallback**. The
+Qwen3.8 primary has been live-tested at its full 262,144-token context at
+roughly 34.5 GiB RSS. The historical matrix below covers the 35B-A3B fallback;
+for the older NEO model, see `docs/kv-cache-math.md`.
 
 Estimated max usable `-c` for Qwen3.6-35B-A3B Q6_K on **M3 Max 64 GB**, with weights mmapped (~28.5 GB) and ~6 GB held by macOS.
 

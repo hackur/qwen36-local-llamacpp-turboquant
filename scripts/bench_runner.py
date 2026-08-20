@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # bench_runner.py — sequential A/B llama.cpp bench runner with JSONL event/control protocol.
-import argparse, json, os, sys, socket, time, fcntl, statistics, urllib.request, urllib.error
+import argparse, atexit, json, os, signal, sys, socket, time, fcntl, statistics, urllib.request, urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -55,7 +55,9 @@ class Control:
                         except json.JSONDecodeError:
                             actions.append({"_bad": line})
                 self.offset = f.tell()
-            self.offset_path.write_text(str(self.offset))
+            tmp = self.offset_path.with_suffix(self.offset_path.suffix + ".tmp")
+            tmp.write_text(str(self.offset))
+            os.replace(tmp, self.offset_path)
         except OSError:
             pass
         return actions
@@ -192,6 +194,19 @@ def acquire_lock():
         sys.exit(2)
     os.ftruncate(fd, 0)
     os.write(fd, f"{os.getpid()}\n".encode())
+
+    def _release():
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            LOCK_PATH.unlink()
+        except OSError:
+            pass
+    atexit.register(_release)
+    signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     return fd
 
 

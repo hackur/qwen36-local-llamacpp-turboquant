@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-# Suite loader/validator for the interactive A/B bench TUI (TODO P5 / Component A).
+# Suite loader/validator for A/B bench jobs: parses YAML, enforces schema, merges defaults.
 from __future__ import annotations
 import os, re, sys
 from typing import Any, Dict, List
+
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 import yaml
 
@@ -28,6 +30,14 @@ def _check_port(p: Any, where: str) -> None:
         raise SuiteError(f"{where}: port must be int, got {type(p).__name__}")
     if p < 1 or p > 65535:
         raise SuiteError(f"{where}: port {p} out of range 1-65535")
+
+
+def _check_prompt_file(pf: Any, where: str) -> None:
+    if not isinstance(pf, str) or not pf:
+        raise SuiteError(f"{where}.prompt_file: must be non-empty str")
+    resolved = pf if os.path.isabs(pf) else os.path.join(_REPO_ROOT, pf)
+    if not (os.path.isfile(resolved) and os.access(resolved, os.R_OK)):
+        raise SuiteError(f"{where}.prompt_file: not found or unreadable: {pf}")
 
 
 def _check_side(side: Any, where: str) -> None:
@@ -57,6 +67,8 @@ def validate(suite: Dict[str, Any]) -> None:
         raise SuiteError("defaults.max_tokens: must be int >= 1")
     if "prompt" in defaults and "prompt_file" in defaults:
         raise SuiteError("defaults: set only one of prompt or prompt_file")
+    if "prompt_file" in defaults:
+        _check_prompt_file(defaults["prompt_file"], "defaults")
 
     jobs = suite.get("jobs")
     if not isinstance(jobs, list) or not jobs:
@@ -81,7 +93,7 @@ def validate(suite: Dict[str, Any]) -> None:
         _check_side(job["a"], f"{where}({jid}).a")
         _check_side(job["b"], f"{where}({jid}).b")
         if job["a"]["port"] == job["b"]["port"]:
-            raise SuiteError(f"{where} ({jid}): port collision — a.port == b.port == {job['a']['port']}")
+            raise SuiteError(f"{where} {jid}: a.port == b.port == {job['a']['port']}")
 
         if "n" in job and (not isinstance(job["n"], int) or job["n"] < 1):
             raise SuiteError(f"{where} ({jid}).n: must be int >= 1")
@@ -89,6 +101,8 @@ def validate(suite: Dict[str, Any]) -> None:
             raise SuiteError(f"{where} ({jid}).max_tokens: must be int >= 1")
         if "prompt" in job and "prompt_file" in job:
             raise SuiteError(f"{where} ({jid}): set only one of prompt or prompt_file")
+        if "prompt_file" in job:
+            _check_prompt_file(job["prompt_file"], f"{where} ({jid})")
 
 
 def merge_defaults(job: Dict[str, Any], defaults: Dict[str, Any]) -> Dict[str, Any]:
@@ -133,7 +147,17 @@ def _cmd_selftest() -> int:
         ("port collision", {
             "name": "x", "jobs": [
                 {"id": "a", "a": {"label": "A", "port": 5}, "b": {"label": "B", "port": 5}},
-            ]}, "port collision"),
+            ]}, "a.port == b.port == 5"),
+        ("same-port A/B", {
+            "name": "x", "jobs": [
+                {"id": "j1", "a": {"label": "A", "port": 8080}, "b": {"label": "B", "port": 2}},
+                {"id": "j2", "a": {"label": "A", "port": 9090}, "b": {"label": "B", "port": 9090}},
+            ]}, "jobs[1] j2: a.port == b.port == 9090"),
+        ("missing prompt_file", {
+            "name": "x", "jobs": [
+                {"id": "a", "prompt_file": "does/not/exist.txt",
+                 "a": {"label": "A", "port": 1}, "b": {"label": "B", "port": 2}},
+            ]}, "prompt_file: not found"),
         ("n=0", {
             "name": "x", "defaults": {"n": 0}, "jobs": [
                 {"id": "a", "a": {"label": "A", "port": 1}, "b": {"label": "B", "port": 2}},

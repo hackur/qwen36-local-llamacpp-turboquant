@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Start TurboQuant llama-server (turbo3 KV cache, 128K ctx) on :10501.
-# Falls back to q8_0 KV cache if the binary doesn't recognize turbo3.
+# Start the primary TurboQuant llama-server on :10501.
+# Qwen3.8 defaults to native 262K context, TurboQuant KV, and embedded MTP.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_common.sh"
@@ -11,7 +11,7 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 fi
 
 PORT="${PORT:-10501}"
-MODEL_INPUT="${MODEL:-$MODEL_PRIMARY}"
+MODEL_INPUT="${MODEL:-$MODEL_PRIMARY_ALIAS}"
 BIN="$REPO/vendor/llama-cpp-turboquant/build/bin/llama-server"
 LOG="$REPO/logs/turboquant.log"
 
@@ -64,6 +64,21 @@ TEMPLATE_FLAGS=( $(chat_template_flags "$MODEL_INPUT") )
 # shellcheck disable=SC2207
 MCP_FLAGS=( $(mcp_proxy_flag "$BIN") )
 
+# Qwen3.8 carries an embedded MTP head. Current TurboQuant supports it directly
+# and measured ~2x faster generation on this M3 Max. MTP=0 disables it.
+MTP_FLAGS=()
+MTP_DESC=""
+if [[ "$MODEL_INPUT" == "qwen38-27b" && "${MTP:-1}" != "0" ]]; then
+  grep -q "draft-mtp" <<< "$HELP_OUT" || {
+    echo "❌ This TurboQuant build does not support Qwen3.8 embedded MTP. Run make upgrade." >&2
+    exit 1
+  }
+  SPEC_N_MAX="${SPEC_N_MAX:-3}"
+  SPEC_P_MIN="${SPEC_P_MIN:-0.5}"
+  MTP_FLAGS=(--spec-type draft-mtp --spec-draft-n-max "$SPEC_N_MAX" --spec-draft-p-min "$SPEC_P_MIN")
+  MTP_DESC=" mtp=${SPEC_N_MAX}@${SPEC_P_MIN}"
+fi
+
 # metrics-opt-in:v1 — set METRICS=1 to enable Prometheus /metrics endpoint.
 METRICS_FLAGS=()
 if [[ "${METRICS:-0}" == "1" || "${METRICS:-0}" == "true" ]]; then
@@ -74,7 +89,7 @@ ROPE_DESC=""
 [[ -n "${ROPE_SCALING:-}" ]] && ROPE_DESC=" rope=${ROPE_SCALING}@${ROPE_SCALE:-1.0}x(orig=${YARN_ORIG_CTX:-?})"
 
 KV_DESC="$KV_K"; [[ "$KV_K" != "$KV_V" ]] && KV_DESC="${KV_K}/${KV_V}"
-echo "▶ turboquant @ http://127.0.0.1:$PORT  (KV=$KV_DESC, ${CTX} ctx${ROPE_DESC})"
+echo "▶ turboquant @ http://127.0.0.1:$PORT  (model=$MODEL_INPUT, KV=$KV_DESC, ${CTX} ctx${MTP_DESC}${ROPE_DESC})"
 echo "  TURBO_LAYER_ADAPTIVE=1   log → $LOG"
 if (( DRY_RUN )); then
   printf "dry-run:"
@@ -88,8 +103,9 @@ if (( DRY_RUN )); then
     ${ROPE_FLAGS[@]+"${ROPE_FLAGS[@]}"} \
     ${TEMPLATE_FLAGS[@]+"${TEMPLATE_FLAGS[@]}"} \
     ${MCP_FLAGS[@]+"${MCP_FLAGS[@]}"} \
+    ${MTP_FLAGS[@]+"${MTP_FLAGS[@]}"} \
     ${METRICS_FLAGS[@]+"${METRICS_FLAGS[@]}"} \
-    --alias qwen3.6-turboquant
+    --alias qwen3.8-turboquant
   printf " 2>&1 | tee %q\n" "$LOG"
   exit 0
 fi
@@ -104,6 +120,7 @@ TURBO_LAYER_ADAPTIVE=1 exec "$BIN" \
   ${ROPE_FLAGS[@]+"${ROPE_FLAGS[@]}"} \
   ${TEMPLATE_FLAGS[@]+"${TEMPLATE_FLAGS[@]}"} \
   ${MCP_FLAGS[@]+"${MCP_FLAGS[@]}"} \
+  ${MTP_FLAGS[@]+"${MTP_FLAGS[@]}"} \
   ${METRICS_FLAGS[@]+"${METRICS_FLAGS[@]}"} \
-  --alias qwen3.6-turboquant \
+  --alias qwen3.8-turboquant \
   2>&1 | tee "$LOG"

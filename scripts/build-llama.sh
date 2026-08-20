@@ -6,6 +6,7 @@ set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 JOBS="$(sysctl -n hw.ncpu)"
 FORCE="${FORCE:-0}"
+source "$REPO/configs/upstream.env"
 
 clone_one() {
   local name="$1" url="$2" branch="$3" dir="$4"
@@ -43,6 +44,7 @@ build_one() {
     -DGGML_METAL=ON \
     -DGGML_NATIVE=ON \
     -DCMAKE_BUILD_TYPE=Release \
+    -DLLAMA_OPENSSL=OFF \
     -DLLAMA_BUILD_SERVER=ON
   cmake --build build -j"$JOBS" --target llama-server llama-cli llama-bench
   echo "✓ $name built → $bin"
@@ -50,12 +52,12 @@ build_one() {
 
 clone_one "mainline" \
   "https://github.com/ggml-org/llama.cpp.git" \
-  "master" \
+  "$LLAMA_CPP_BRANCH" \
   "$REPO/vendor/llama.cpp-mainline"
 
 clone_one "turboquant" \
   "https://github.com/TheTom/llama-cpp-turboquant.git" \
-  "feature/turboquant-kv-cache" \
+  "$TURBOQUANT_BRANCH" \
   "$REPO/vendor/llama-cpp-turboquant"
 
 build_one "mainline"    "$REPO/vendor/llama.cpp-mainline"

@@ -82,4 +82,17 @@ belong in agent-layer docs, not `RESULTS.md`.
 
 See `docs/benchmarking-discipline.md` for the full rationale.
 
+### Contributing a bench suite
+
+Suite YAMLs live in `benchmarks/suites/*.yaml` and are consumed by
+`scripts/bench_runner.py` / `scripts/bench_tui.py`. Before submitting:
+
+- Validate the file: `python3 scripts/bench_suite.py validate benchmarks/suites/<your-file>.yaml`
+- Keep job ports distinct from any already-bound runtime port.
+- Results produced from the suite still need the metadata block listed
+  above when posted to `benchmarks/RESULTS.md`.
+- The runner/TUI integration contract (events.jsonl, control.jsonl,
+  phase set, run-dir layout) is documented in
+  `docs/benchmarking-discipline.md` — read it before changing the runner.
+
 Avoid raw logs that contain local usernames, absolute private paths, or machine-specific process tables.

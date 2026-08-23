@@ -79,7 +79,7 @@ section "Symlink integrity"
 shopt -s nullglob
 links=("$REPO/models"/*.gguf)
 if (( ${#links[@]} == 0 )); then
-  log "  FAIL: no symlinks found under models/ — run scripts/symlink-models.sh"
+  log "  FAIL: no model links found — run make model-link"
   fail=1
 else
   ok=0; broken=0

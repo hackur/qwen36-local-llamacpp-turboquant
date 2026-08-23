@@ -2,6 +2,7 @@
 # One-shot info dashboard — everything worth knowing about the running stack.
 # Usage:  ./scripts/info.sh           one-shot
 #         ./scripts/info.sh --watch   refresh every 2 s (Ctrl-C to exit)
+#         ./scripts/info.sh --audit-offline
 #         WATCH_INTERVAL=5 ./scripts/info.sh --watch
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -40,6 +41,39 @@ try:
   print($expr)
 except Exception:
   print('?')" 2>/dev/null || echo "?"
+}
+
+audit_offline() {
+  local pids=() pid sockets non_local failed=0
+  while IFS= read -r pid; do
+    [[ -n "$pid" ]] && pids+=("$pid")
+  done < <(pgrep -f "$REPO/vendor/.*build/bin/llama-server" 2>/dev/null || true)
+
+  if (( ${#pids[@]} == 0 )); then
+    echo "offline audit: no repository llama-server process is running" >&2
+    return 1
+  fi
+
+  for pid in "${pids[@]}"; do
+    echo "llama-server pid=$pid"
+    sockets="$(lsof -nP -a -p "$pid" -iTCP -iUDP 2>/dev/null | tail -n +2 || true)"
+    if [[ -z "$sockets" ]]; then
+      echo "  PASS: no network sockets"
+      continue
+    fi
+
+    non_local="$(awk '$NF !~ /^(127\.0\.0\.1:|\[::1\]:)/ { print }' <<< "$sockets")"
+    if [[ -n "$non_local" ]]; then
+      echo "  FAIL: non-loopback socket(s) detected"
+      sed 's/^/    /' <<< "$non_local"
+      failed=1
+    else
+      echo "  PASS: all sockets are loopback-only"
+      sed 's/^/    /' <<< "$sockets"
+    fi
+  done
+
+  return "$failed"
 }
 
 # ── ENVIRONMENT ─────────────────────────────────────────────────────────────
@@ -251,7 +285,9 @@ draw() {
 }
 
 # ── main ────────────────────────────────────────────────────────────────────
-if [[ "${1:-}" == "--watch" ]]; then
+if [[ "${1:-}" == "--audit-offline" ]]; then
+  audit_offline
+elif [[ "${1:-}" == "--watch" ]]; then
   IV="${WATCH_INTERVAL:-2}"
   trap 'echo; echo "(stopped)"; exit 0' INT
   while true; do

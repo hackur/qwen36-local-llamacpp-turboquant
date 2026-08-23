@@ -65,9 +65,15 @@ class Control:
 
 def http_chat(port, prompt, max_tokens, timeout=600):
     body = json.dumps({
-        "model": "local",
+        "model": "qwen3.8-local",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 1.5,
+        "reasoning_effort": "none",
         "chat_template_kwargs": {"enable_thinking": False},
     }).encode("utf-8")
     req = urllib.request.Request(

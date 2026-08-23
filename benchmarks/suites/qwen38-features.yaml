@@ -1,0 +1,20 @@
+name: qwen38-features
+description: Controlled comparisons using the same Qwen3.8-27B Q8_0 weights.
+defaults:
+  n: 5
+  max_tokens: 500
+  prompt: |
+    Implement a production-quality LRU cache in Python. Explain the invariants,
+    complexity, failure modes, and tests, then provide the implementation.
+jobs:
+  - id: adaptive-mtp-vs-no-mtp
+    # A: default full runtime.
+    # B: PORT=10500 MTP=0 ./scripts/start-turboquant.sh
+    a: { label: qwen38-adaptive-mtp, port: 10501 }
+    b: { label: qwen38-no-mtp, port: 10500 }
+
+  - id: turboquant-vs-mainline
+    # A: default full runtime.
+    # B: PORT=10500 CTX=32768 ./scripts/start-baseline.sh
+    a: { label: qwen38-turboquant, port: 10501 }
+    b: { label: qwen38-mainline-f16, port: 10500 }

@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from bench_spawn import spawn_runner
+
 try:
     from textual.app import App, ComposeResult
     from textual.binding import Binding
@@ -411,23 +413,11 @@ def pick_latest() -> Optional[Path]:
     return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
-def spawn_runner_stub(suite: Path) -> Path:
-    # Minimal stub: create a fresh run dir and note the suite. Component B owns the real subprocess.
-    base = Path("benchmarks/runs")
-    base.mkdir(parents=True, exist_ok=True)
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    run_dir = base / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "suite_files.txt").write_text(str(suite.resolve()) + "\n")
-    sys.stderr.write(f"[bench_tui] --spawn is a stub; created {run_dir}. Start bench_runner.py manually.\n")
-    return run_dir
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description="A/B bench TUI")
     ap.add_argument("target", nargs="?", help="run-dir or suite.yaml")
     ap.add_argument("--latest", action="store_true", help="auto-pick newest benchmarks/runs/*/")
-    ap.add_argument("--spawn", action="store_true", help="(stub) spawn runner for given suite")
+    ap.add_argument("--spawn", action="store_true", help="spawn runner for the given suite")
     args = ap.parse_args()
 
     run_dir: Optional[Path] = None
@@ -442,7 +432,9 @@ def main() -> int:
             run_dir = p
         elif p.suffix in (".yaml", ".yml") and p.is_file():
             if args.spawn:
-                run_dir = spawn_runner_stub(p)
+                run_dir = spawn_runner(p)
+                pid = (run_dir / "runner.pid").read_text().strip()
+                sys.stderr.write(f"[bench_tui] runner pid {pid}; log: {run_dir / 'runner.log'}\n")
             else:
                 sys.stderr.write("suite file given without --spawn; pass a run-dir instead\n")
                 return 2

@@ -4,6 +4,7 @@ SHELL := bash
 
 .PHONY: help build upgrade model-link preflight check start start-foreground \
 	start-offline start-baseline stop status info bench bench-suite bench-tui \
+	bench-venv \
 	needle quality vision demo open proxy-install proxy-test proxy-start \
 	proxy-smoke analyze-watermarks privacy-scan prepush quarterly-audit \
 	audit-offline install-launchd uninstall-launchd clean
@@ -56,9 +57,13 @@ info: ## Show the full local runtime dashboard
 bench: ## Benchmark the running Qwen3.8 server on :10501
 	python3 scripts/bench.py 10501 "qwen38-full"
 
+bench-venv: ## Create/update the isolated benchmark TUI environment
+	python3 -m venv .venv
+	.venv/bin/pip install -r requirements-tui.txt
+
 bench-suite: ## Run the Qwen3.8 feature suite headlessly
 	@SUITE="$${SUITE:-benchmarks/suites/qwen38-features.yaml}"; \
-	python3 scripts/bench_runner.py run "$$SUITE"
+	.venv/bin/python scripts/bench_runner.py run "$$SUITE"
 
 bench-tui: ## Run or attach to the Qwen3.8 benchmark TUI
 	@if [[ -n "$$RUN_DIR" ]]; then \

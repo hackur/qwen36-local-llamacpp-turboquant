@@ -14,7 +14,10 @@ upgrade_one() {
     git -C "$dir" status --short >&2
     return 1
   }
-  git -C "$dir" fetch --prune origin "$branch:refs/remotes/origin/$branch"
+  # Each shallow vendor checkout already maps its accepted branch to the
+  # matching origin-tracking ref. Passing the same destination refspec again
+  # can make newer Git releases prune and recreate that ref in one fetch.
+  git -C "$dir" fetch --prune origin "$branch"
   git -C "$dir" switch -C "$branch" "origin/$branch"
   git -C "$dir" log -1 --format='  ✓ %H %cs %s'
 }
@@ -22,7 +25,10 @@ upgrade_one() {
 upgrade_one "llama.cpp" "$REPO/vendor/llama.cpp-mainline" "$LLAMA_CPP_BRANCH"
 upgrade_one "TurboQuant" "$REPO/vendor/llama-cpp-turboquant" "$TURBOQUANT_BRANCH"
 
-FORCE=1 "$REPO/scripts/build-llama.sh"
+# Candidate mode is the sole exception to build-llama.sh's accepted-pin
+# enforcement. The exact candidate revisions are printed below and become
+# normal build inputs only after local validation updates upstream.env.
+CANDIDATE=1 FORCE=1 "$REPO/scripts/build-llama.sh"
 
 echo
 echo "Verified revisions:"

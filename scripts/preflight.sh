@@ -3,6 +3,7 @@
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO/scripts/_common.sh"
+source "$REPO/configs/upstream.env"
 
 fail=0
 check_cmd() {
@@ -23,6 +24,17 @@ check_path() {
     fail=1
   fi
 }
+check_revision() {
+  local label="$1" dir="$2" expected="$3" actual
+  actual="$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)"
+  if [[ "$actual" == "$expected" ]]; then
+    printf '  ok  %-18s %s\n' "$label" "${actual:0:12}"
+  else
+    printf '  ERR %-18s expected %s, found %s (run: make build)\n' \
+      "$label" "${expected:0:12}" "${actual:0:12}"
+    fail=1
+  fi
+}
 
 echo "Tools"
 check_cmd git "install Xcode command-line tools"
@@ -38,6 +50,8 @@ check_path "mainline source" "$REPO/vendor/llama.cpp-mainline/.git" "run: make b
 check_path "TurboQuant source" "$REPO/vendor/llama-cpp-turboquant/.git" "run: make build"
 check_path "mainline server" "$MAINLINE_BIN" "run: make build"
 check_path "TurboQuant server" "$TURBOQUANT_BIN" "run: make build"
+check_revision "mainline revision" "$REPO/vendor/llama.cpp-mainline" "$LLAMA_CPP_SHA"
+check_revision "TurboQuant revision" "$REPO/vendor/llama-cpp-turboquant" "$TURBOQUANT_SHA"
 
 echo "Qwen3.8 artifacts"
 check_path "Q8_0 weights" "$MODEL_FILE" "run: make model-link"

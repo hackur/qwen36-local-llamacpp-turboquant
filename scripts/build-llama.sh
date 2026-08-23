@@ -6,6 +6,7 @@ set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 JOBS="$(sysctl -n hw.ncpu)"
 FORCE="${FORCE:-0}"
+CANDIDATE="${CANDIDATE:-0}"
 source "$REPO/configs/upstream.env"
 
 clone_one() {
@@ -22,6 +23,22 @@ clone_one() {
   mkdir -p "$(dirname "$dir")"
   echo "▶ Cloning $name ($branch)"
   git clone --depth 1 --branch "$branch" "$url" "$dir"
+}
+
+pin_one() {
+  local name="$1" dir="$2" sha="$3"
+  [[ "$CANDIDATE" == "1" ]] && return 0
+  [[ -z "$(git -C "$dir" status --porcelain)" ]] || {
+    echo "❌ $name checkout is dirty; refusing to change revisions" >&2
+    git -C "$dir" status --short >&2
+    return 1
+  }
+  if ! git -C "$dir" cat-file -e "$sha^{commit}" 2>/dev/null; then
+    echo "▶ Fetching accepted $name revision $sha"
+    git -C "$dir" fetch --depth 1 origin "$sha"
+  fi
+  git -C "$dir" switch --detach "$sha" >/dev/null
+  echo "✓ $name source pinned at $sha"
 }
 
 build_one() {
@@ -59,6 +76,9 @@ clone_one "turboquant" \
   "https://github.com/TheTom/llama-cpp-turboquant.git" \
   "$TURBOQUANT_BRANCH" \
   "$REPO/vendor/llama-cpp-turboquant"
+
+pin_one "mainline" "$REPO/vendor/llama.cpp-mainline" "$LLAMA_CPP_SHA"
+pin_one "turboquant" "$REPO/vendor/llama-cpp-turboquant" "$TURBOQUANT_SHA"
 
 build_one "mainline"    "$REPO/vendor/llama.cpp-mainline"
 build_one "turboquant"  "$REPO/vendor/llama-cpp-turboquant"

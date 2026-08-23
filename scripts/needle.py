@@ -37,7 +37,7 @@ def _target(s):
 
 def call(port, prompt, max_tokens=80, timeout=600):
     body = json.dumps({
-        "model": "local",
+        "model": "qwen3.8-local",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
         "temperature": 0.0,

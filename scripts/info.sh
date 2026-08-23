@@ -62,7 +62,10 @@ audit_offline() {
       continue
     fi
 
-    non_local="$(awk '$NF !~ /^(127\.0\.0\.1:|\[::1\]:)/ { print }' <<< "$sockets")"
+    # lsof appends a state column such as `(LISTEN)` or `(ESTABLISHED)`, so the
+    # endpoint is the penultimate field in those rows and the final field in
+    # state-less rows.
+    non_local="$(awk '{ endpoint=$NF; if ($NF ~ /^\(/) endpoint=$(NF-1); if (endpoint !~ /^(127\.0\.0\.1:|\[::1\]:)/) print }' <<< "$sockets")"
     if [[ -n "$non_local" ]]; then
       echo "  FAIL: non-loopback socket(s) detected"
       sed 's/^/    /' <<< "$non_local"

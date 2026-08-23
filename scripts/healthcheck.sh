@@ -15,7 +15,7 @@ echo
 echo "── completion + tok/s (thinking off) ──"
 curl -s "$URL/v1/chat/completions" \
   -H "Content-Type: application/json" \
-  -d '{"model":"local","messages":[{"role":"user","content":"Say hi in 5 words."}],"max_tokens":40,"chat_template_kwargs":{"enable_thinking":false}}' \
+  -d '{"model":"qwen3.8-local","messages":[{"role":"user","content":"Say hi in 5 words."}],"max_tokens":40,"chat_template_kwargs":{"enable_thinking":false}}' \
   | python3 -c "
 import json, sys
 r = json.loads(sys.stdin.read(), strict=False)  # tolerate raw control chars in content

@@ -13,8 +13,9 @@ find "$LOGDIR" -type f -name "*.log" -mtime +0 ! -name "*.gz" -print -exec gzip 
 # 2. Delete compressed logs older than KEEP_DAYS.
 find "$LOGDIR" -type f -name "*.log.gz" -mtime "+$KEEP_DAYS" -print -delete
 
-# 3. Truncate the active turboquant.log if larger than 100 MB (server keeps appending while running).
-for f in "$LOGDIR/turboquant.log" "$LOGDIR/baseline.log"; do
+# 3. Truncate an active Qwen3.8 log if it exceeds 100 MB. The copy preserves
+# the complete pre-truncation record for the normal compression pass.
+for f in "$LOGDIR/qwen38.log" "$LOGDIR/qwen38-baseline.log"; do
   [[ -f "$f" ]] || continue
   # `stat` flags differ between macOS BSD and GNU coreutils — `wc -c` is POSIX everywhere.
   size=$(wc -c < "$f" | tr -d ' ')

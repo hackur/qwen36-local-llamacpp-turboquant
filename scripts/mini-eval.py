@@ -1,25 +1,42 @@
 #!/usr/bin/env python3
-"""Tiny 10-problem eval: math, code, reasoning, structured output.
-Each problem has a `check(output)` predicate. Prints pass/fail per problem and a total.
+"""Local Qwen3.8 ten-problem acceptance check.
+
+Each problem has a `check(output)` predicate. Any failed request or answer makes
+the process fail so this can be used as a real local release gate.
 Usage:  python3 scripts/mini-eval.py [<port>]
 """
-import json, re, sys, time, urllib.request
+import json
+import re
+import sys
+import time
+import urllib.request
 
-def call(port, prompt, max_tokens=400):
+def call(port, prompt, max_tokens=400, think=False):
     body = json.dumps({
-        "model": "local",
+        "model": "qwen3.8-local",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
-        "temperature": 0.2,
-        "chat_template_kwargs": {"enable_thinking": False},
+        # Qwen3.8's published thinking/non-thinking sampling differs. Reasoning
+        # cases exercise thinking; formatting and language cases exercise the
+        # instruct path with the matching official values.
+        "temperature": 1.0 if think else 0.7,
+        "top_p": 0.95 if think else 0.8,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0 if think else 1.5,
+        "chat_template_kwargs": {"enable_thinking": think},
     }).encode()
     req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/chat/completions",
                                  data=body, headers={"Content-Type":"application/json"})
     raw = urllib.request.urlopen(req, timeout=180).read().decode()
     return json.loads(raw, strict=False)["choices"][0]["message"]["content"]
 
-def has_num(s, n): return str(n) in s
-def matches_re(s, pat): return bool(re.search(pat, s, re.I|re.S))
+def has_num(s, n):
+    return str(n) in s
+
+
+def matches_re(s, pat):
+    return bool(re.search(pat, s, re.I | re.S))
 
 PROBLEMS = [
   ("Compute 23 * 47 + 18. Show only the final number.",          lambda s: has_num(s, 1099)),
@@ -42,12 +59,17 @@ PROBLEMS = [
 
 def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 10501
+    try:
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2)
+    except Exception as exc:
+        raise SystemExit(f"Qwen3.8 is not healthy on :{port}: {exc}") from exc
     print(f"Mini-eval against :{port}\n")
     pass_count = 0
+    thinking_cases = {1, 2, 4, 8}
     t0 = time.time()
     for i, (q, check) in enumerate(PROBLEMS, 1):
         try:
-            out = call(port, q).strip()
+            out = call(port, q, think=i in thinking_cases).strip()
         except Exception as e:
             print(f"  [{i}] ERR {e}"); continue
         ok = check(out)
@@ -56,6 +78,8 @@ def main():
         print(f"  [{i}] {'✓' if ok else '✗'}  {first_line[:80]}")
     dt = time.time() - t0
     print(f"\n  {pass_count}/10 passed · {dt:.1f}s")
+    if pass_count != len(PROBLEMS):
+        raise SystemExit(1)
 
 if __name__ == "__main__":
     main()

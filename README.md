@@ -68,6 +68,7 @@ llama.cpp with f16 KV and no MTP. It exists only as a controlled comparison.
 make check            # shell/Python syntax + unit tests + privacy scan
 make proxy-test       # compaction proxy tests
 make quality          # deterministic text checks against a running model
+make eval             # ten-case pass/fail model acceptance gate
 make vision           # multimodal request against the same :10501 server
 make needle           # 50K long-context recall probe
 make bench            # current endpoint throughput

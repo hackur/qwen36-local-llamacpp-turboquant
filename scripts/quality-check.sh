@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# Run 5 fixed prompts on baseline vs turboquant. Diff is informational, not pass/fail.
+# Run five fixed quality prompts against the complete Qwen3.8 runtime.
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PORT="${PORT:-10501}"
 TS="$(date +%Y%m%d-%H%M%S)"
 OUT="$REPO/benchmarks/quality-$TS"
+
+curl -sf --max-time 2 "http://127.0.0.1:$PORT/health" >/dev/null || {
+  echo "Qwen3.8 is not healthy on :$PORT" >&2
+  exit 1
+}
 mkdir -p "$OUT"
 
 PROMPTS=(
@@ -22,14 +28,13 @@ run_one() {
     i=$((i+1))
     echo "[$i] $p"
     resp=$(curl -sf "http://127.0.0.1:$port/v1/chat/completions" -H "Content-Type: application/json" \
-      -d "$(jq -nc --arg p "$p" '{model:"local",messages:[{role:"user",content:$p}],max_tokens:600,temperature:0.6,chat_template_kwargs:{enable_thinking:false}}')")
+      -d "$(jq -nc --arg p "$p" '{model:"qwen3.8-local",messages:[{role:"user",content:$p}],max_tokens:600,temperature:0.7,top_p:0.8,top_k:20,min_p:0.0,presence_penalty:1.5,reasoning_effort:"none",chat_template_kwargs:{enable_thinking:false}}')")
     out=$(echo "$resp" | python3 -c "import sys,json; r=json.load(sys.stdin,strict=False); print(r['choices'][0]['message']['content'])")
     echo "$out" | tee "$OUT/$tag-$i.txt"
     echo
   done
 }
 
-run_one 10500 baseline   2>/dev/null || echo "  (skipped — :10500 not up)"
-run_one 10501 turboquant 2>/dev/null || echo "  (skipped — :10501 not up)"
+run_one "$PORT" qwen38-full
 
 echo "outputs → $OUT"

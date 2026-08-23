@@ -431,7 +431,7 @@ _HELP_TEXT = """\
 
 def build_request_body(state: State, history: History) -> dict:
     body: dict = {
-        "model": "local",
+        "model": "qwen3.8-local",
         "stream": True,
         "stream_options": {"include_usage": True},
         "messages": history.to_messages(),

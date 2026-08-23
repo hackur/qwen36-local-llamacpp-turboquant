@@ -5,7 +5,7 @@ SHELL := bash
 .PHONY: help build upgrade model-link preflight check start start-foreground \
 	start-offline start-baseline stop status info bench bench-suite bench-tui \
 	bench-venv \
-	needle quality vision demo open proxy-install proxy-test proxy-start \
+	needle quality eval vision demo open proxy-install proxy-test proxy-start \
 	proxy-smoke analyze-watermarks privacy-scan prepush quarterly-audit \
 	audit-offline install-launchd uninstall-launchd clean
 
@@ -55,7 +55,7 @@ info: ## Show the full local runtime dashboard
 	./scripts/info.sh
 
 bench: ## Benchmark the running Qwen3.8 server on :10501
-	python3 scripts/bench.py 10501 "qwen38-full"
+	python3 scripts/bench.py 10501 "qwen38-full" "$${RUNS:-5}"
 
 bench-venv: ## Create/update the isolated benchmark TUI environment
 	python3 -m venv .venv
@@ -76,8 +76,11 @@ bench-tui: ## Run or attach to the Qwen3.8 benchmark TUI
 needle: ## Run a 50K-token long-context recall probe against Qwen3.8
 	python3 scripts/needle.py 50000
 
-quality: ## Run deterministic text quality checks against Qwen3.8
+quality: ## Run fixed prompts with official Qwen3.8 non-thinking sampling
 	./scripts/quality-check.sh
+
+eval: ## Run the ten-case pass/fail Qwen3.8 mini-evaluation
+	python3 scripts/mini-eval.py 10501
 
 vision: ## Run the multimodal smoke test against the unified Qwen3.8 server
 	./scripts/test-vision.sh

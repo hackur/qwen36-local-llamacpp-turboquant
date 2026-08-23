@@ -21,6 +21,16 @@
   through the same Qwen3.8 upstream.
 - Removed the orphan root npm lock and moved Node guidance to current LTS.
 - Kept all testing local; no hosted CI workflow is present or planned.
+- Refreshed the locally built engine pins to llama.cpp `95b8e33e16` and
+  TurboQuant `cfd7bde3f` after full-feature runtime checks and a prior-pin
+  throughput control.
+- Made `make quality` fail when the full runtime is unavailable instead of
+  silently emitting empty baseline output, and made `make bench` default to the
+  documented five runs.
+- Passed the accepted build's 50K recall probe at 44,486 actual prompt tokens
+  while the native 262,144-token window was loaded.
+- Added a failing ten-case model acceptance gate with Qwen3.8's official
+  thinking/non-thinking sampling profiles; the accepted build passes 10/10.
 
 ## v0.0.2 — 2026-05-07
 

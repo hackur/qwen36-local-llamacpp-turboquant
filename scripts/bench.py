@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """A/B benchmark — robust to Qwen's raw control-char output (which jq rejects).
-Usage:  python3 scripts/bench.py <port> [<label>]
+Usage:  python3 scripts/bench.py <port> [<label>] [<runs>]
 """
 import json, sys, time, urllib.request, urllib.error
 
@@ -10,7 +10,7 @@ PROMPT = ("Explain in detail how transformer attention mechanisms work. "
 
 def call(port, prompt, max_tokens=500, think=False):
     body = json.dumps({
-        "model": "local",
+        "model": "qwen3.8-local",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
         "chat_template_kwargs": {"enable_thinking": think},
@@ -20,7 +20,7 @@ def call(port, prompt, max_tokens=500, think=False):
     raw = urllib.request.urlopen(req, timeout=300).read().decode()
     return json.loads(raw, strict=False)  # strict=False → tolerate raw \n in strings
 
-def bench(port, label, runs=3):
+def bench(port, label, runs=5):
     print(f"=== {label} (port {port}) ===")
     try: call(port, "hi", max_tokens=5)
     except Exception as e:
@@ -45,4 +45,7 @@ def bench(port, label, runs=3):
 if __name__ == "__main__":
     port = int(sys.argv[1])
     label = sys.argv[2] if len(sys.argv) > 2 else f"port {port}"
-    bench(port, label)
+    runs = int(sys.argv[3]) if len(sys.argv) > 3 else 5
+    if runs < 1:
+        raise SystemExit("runs must be at least 1")
+    bench(port, label, runs)

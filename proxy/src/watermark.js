@@ -1,6 +1,7 @@
 // watermark.js — compaction trigger logic.
 //
-// Implements the three signals from docs/compaction-strategy.md §5:
+// Implements the three context-pressure signals documented in
+// docs/compaction-strategy.md:
 //   1. Token watermark: currentTokens / nCtx >= watermarkRatio
 //   2. Message-count + age: messages.length >= maxMessages AND oldest
 //      non-system message is more than maxAge turns ago

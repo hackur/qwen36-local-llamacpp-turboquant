@@ -1,4 +1,4 @@
-// Tier 1: tool-result elision (docs/compaction-strategy.md §6 Tier 1).
+// Tier 1: tool-result elision; see docs/compaction-strategy.md.
 //
 // For every evictable message that carries a tool result, if the result body
 // exceeds `min_tokens`, persist the original verbatim under

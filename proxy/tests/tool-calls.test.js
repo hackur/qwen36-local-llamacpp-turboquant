@@ -20,7 +20,7 @@ import { JsonlLogger } from "../src/jsonl-logger.js";
 import { createProxyServer } from "../src/server.js";
 
 // SSE chunks emitted by llama-server when the assistant emits a tool_call.
-// The shape mirrors what we've seen on the wire from qwen36-neo: a leading
+// The shape mirrors Qwen3.8 tool traffic: a leading
 // role chunk, then several arguments deltas, then a finish_reason="tool_calls"
 // chunk, then a usage frame, then [DONE].
 const TOOL_CALL_CHUNKS = [

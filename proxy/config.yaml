@@ -3,7 +3,7 @@
 # Phase 0 is passthrough only. Watermark / mode plumbing exists so Phase 1
 # can plug in compaction without a config break.
 
-# Address the proxy listens on. Default matches docs/compaction-strategy.md §4.
+# Address the proxy listens on. See docs/compaction-strategy.md.
 listen:
   host: "127.0.0.1"
   port: 11500

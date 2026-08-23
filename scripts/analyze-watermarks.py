@@ -13,8 +13,8 @@ Usage:
 
 Stdlib only. Read-only against telemetry files.
 
-See docs/compaction-strategy.md §11 — "Watermark tuning. 70% is a guess.
-Real number lives in the data once Phase 0 instrumentation runs for a week."
+See docs/watermark-tuning.md. The initial 70% candidate should be replaced by
+local telemetry once enough normal sessions have been recorded.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from typing import Iterable
 
 DEFAULT_LOGS = os.path.expanduser("~/.cache/qwen-compact/logs/*.jsonl")
-DEFAULT_N_CTX = 32768  # typical Qwen3.6 turboquant slot; override with --n-ctx
+DEFAULT_N_CTX = 262144  # Qwen3.8 native context; override with --n-ctx
 DEFAULT_SESSION_GAP_MIN = 15  # inactivity gap that ends a session
 WATERMARKS = (0.50, 0.60, 0.70, 0.75, 0.80)
 # A session is considered to have "filled" the window if utilization ever
@@ -184,7 +184,7 @@ def suggest(report: dict) -> tuple[float, str]:
     rows = report["rows"]
     filled = report["sessions_filled"]
     if filled == 0:
-        return 0.70, "no sessions filled the window — keeping the §5 default 70%"
+        return 0.70, "no sessions filled the window — keeping the default 70%"
     # Score: minimize FPR, maximize lead.
     candidates = [r for r in rows if r["sessions_triggered"] > 0]
     if not candidates:

@@ -1,10 +1,12 @@
 # Proxy Hook/Middleware System — Design Specification
 
-**Status:** Draft v0.2 — 2026-05-07 — implementation contract.
+**Status:** Implemented v0.2; tests under `proxy/tests/hooks.test.js` are the
+executable contract.
 **Audience:** anyone implementing or extending the proxy at `proxy/`.
 **Companion docs:** [`compaction-strategy.md`](compaction-strategy.md), [`proxy.md`](proxy.md), [`../SECURITY.md`](../SECURITY.md).
 
-This document is the contract that subsequent implementation tasks must conform to. Implementation must not begin until this is reviewed.
+This document records the implemented hook contract. Changes to it must update
+the implementation and tests in the same commit.
 
 ### Changelog
 
@@ -33,7 +35,7 @@ This document is the contract that subsequent implementation tasks must conform 
 
 **Goals.** The hook system gives the proxy a stable, composable extension surface so that new compaction behaviors — tool-result elision policies, mid-stream injection, prose summarization — can be added and removed without modifying `server.js`, `rewrite.js`, or the tier modules. Hooks are registered against named lifecycle phases; each hook declares a filter (which requests/events it cares about) and a handler (what it does). The registry is passed into `createProxyServer` as a dependency, keeping the hot path testable in isolation. Every hook that ships as part of this project is measurable: per-hook latency is logged in the JSONL record, cumulative hook time is surfaced, and hooks can be enabled/disabled via `config.yaml` without code changes.
 
-**Non-goals.** The hook system must not introduce global mutable state — there is no singleton registry; each server instance owns its registry. It must not create async storms — hooks that invoke external processes (e.g. `proxy/python/compact.py`) are bounded by a per-hook timeout and run sequentially within a phase, never in unconstrained parallel fan-out. It makes no Anthropic-specific assumptions — message shapes are OpenAI Chat Completions throughout, tolerating both OpenAI `role:"tool"` and Anthropic-style content blocks exactly as `tier1.js` and `tier2-index.js` already do. It is not a replacement for the Tier 0/1 pipeline — `verbatim.js`, `tier1.js`, and `rewrite.js` remain the authoritative compaction logic; hooks compose over them, not around them. It does not expose a plugin registry to untrusted callers — there is no HTTP endpoint for registering hooks at runtime.
+**Non-goals.** The hook system must not introduce global mutable state — there is no singleton registry; each server instance owns its registry. It must not create async storms — asynchronous hooks are bounded by a per-hook timeout and run sequentially within a phase, never in unconstrained parallel fan-out. It makes no Anthropic-specific assumptions — message shapes are OpenAI Chat Completions throughout, tolerating both OpenAI `role:"tool"` and Anthropic-style content blocks exactly as `tier1.js` and `tier2-index.js` already do. It is not a replacement for the Tier 0/1 pipeline — `verbatim.js`, `tier1.js`, and `rewrite.js` remain the authoritative compaction logic; hooks compose over them, not around them. It does not expose a plugin registry to untrusted callers — there is no HTTP endpoint for registering hooks at runtime.
 
 ---
 
@@ -568,7 +570,7 @@ Actions exercised: `inject`, `tag`.
 
 ### Example 3: Summarize-and-replace assistant prose blocks
 
-Implements the Tier-4 fallback from `compaction-strategy.md §6` by shelling out to `proxy/python/compact.py`.
+Summarizes oversized prose tool results through the direct Qwen3.8 upstream.
 
 ```yaml
 hooks:
@@ -583,16 +585,16 @@ hooks:
   - id: "prose-summarize"
     phase: "request:before-rewrite"
     priority: 100
-    timeout_ms: 8000      # compact.py can take seconds on long inputs
+    timeout_ms: 8000
     filter:
       prompt_token_fraction_gt: 0.70
       mode_in: ["enforce"]
     handler: "built-in:prose-summarize"
     config:
       min_prose_tokens: 500
-      token_budget: 1500
-      algorithm: "lexrank"
-      compact_py: "proxy/python/compact.py"
+      summarizer_url: "http://127.0.0.1:10501"
+      model: "qwen3.8-local"
+      max_tokens: 512
 ```
 
 ```js
@@ -602,37 +604,16 @@ async function checkProseNeeded(ctx) {
   }
 }
 
-async function proseSummarize(ctx, hookConfig) {
-  if (ctx.tags.has('prose-summarize-skip')) return;
-  const candidates = (ctx.messages || []).filter(m =>
-    m.role === 'assistant'
-    && !Array.isArray(m.tool_calls)
-    && typeof m.content === 'string'
-    && Math.ceil(m.content.length / 4) > hookConfig.min_prose_tokens
-  );
-  if (candidates.length === 0) return;
-  const summary = await spawnCompactPy(hookConfig.compact_py, JSON.stringify({
-    messages: candidates,
-    previous_summary: '',
-    token_budget: hookConfig.token_budget,
-    algorithm: hookConfig.algorithm,
-  }));
-  if (!summary) return; // compact.py exited 2; fall through to tier1
-  const newMessages = (ctx.messages || []).filter(m => !candidates.includes(m));
-  newMessages.splice(1, 0, {
-    role: 'assistant',
-    content: `<summary>${summary}</summary>`,
-    _hook_injected: true,
-    _hook_id: 'prose-summarize',
-  });
-  ctx.replace('messages', newMessages);
-  ctx.tag('prose-summarized');
-}
+The built-in handler selects prose-shaped `role: "tool"` results, calls
+`summarizer_url` with the requested Qwen3.8 model, replaces successful results
+with `<tool_result_summary>`, and tags the request `prose-summarized`. A timeout
+or invalid response leaves the original value for the deterministic tiers.
 ```
 
 Note on `abort()` vs skip-tag: `abort()` terminates the request. Use a skip-tag when you want to suppress *downstream hooks* without failing the request. `abort()` is reserved for policy rejections (auth, blocked content, malformed body).
 
-Actions exercised: `replace` (messages), `tag`, side-effect on `compact.py`. The `abort()` action is mechanically demonstrated in the security note below.
+Actions exercised: message mutation and `tag`. The `abort()` action is
+mechanically demonstrated in the security note below.
 
 ---
 
@@ -646,7 +627,8 @@ Actions exercised: `replace` (messages), `tag`, side-effect on `compact.py`. The
 
 Tool-result content must NEVER be parsed as filter input. The declarative filter DSL evaluates against `RequestContext` metadata fields only — never against `messages[].content`. A crafted tool result containing `{"tool_name": "Bash"}` does not satisfy a `tool_name: "Bash"` filter; that filter checks `ctx.toolName`, populated from the assistant's `tool_calls[].function.name` in the SSE stream. Implementations must preserve this distinction.
 
-This addresses the CompressionAttack class (arXiv 2510.22963) cited in [`compaction-strategy.md §3.3`](compaction-strategy.md). Hooks invoking LLMLingua-style compression should apply the same caution.
+This addresses the CompressionAttack class (arXiv 2510.22963). Hooks invoking
+token-level compression should apply the same caution.
 
 ### Hook handler trust
 
@@ -654,7 +636,9 @@ Programmatic hooks have full `RequestContext` access including `rawBody`, `heade
 
 ### Timeout boundary
 
-Per-hook timeout abandons the promise; it does not kill execution. Subprocesses spawned by hooks continue past the timeout. They cannot exfiltrate data (proxy is offline-clean) but consume resources. Subprocess-spawning hooks must wire `AbortController` and kill on timeout.
+Per-hook timeout abandons the promise; it does not cancel arbitrary handler
+work. Network handlers must wire `AbortController`; local resource cleanup stays
+the handler's responsibility.
 
 ### `abort()` as policy enforcement
 
@@ -740,7 +724,8 @@ The harness emits **per-cell rows** (one per fixture × variant × seed) matchin
 
 ### Quality gates
 
-- **Primary:** `needle_recall_pct ≥ 90` on the needle fixture (per `compaction-strategy.md §8.3`). Below 90 → hook ships disabled by default.
+- **Primary:** `needle_recall_pct ≥ 90` on the committed needle fixture. Below
+  90 means the hook remains disabled by default.
 - **Secondary:** `token_reduction_pct > 0` vs `tier0+tier1`, OR `latency_p50_ms < tier0+tier1` — must offer either tokens or latency win.
 - **Sanity:** `hook_error_rate < 0.01`, `hook_timeout_rate < 0.05`.
 
@@ -850,7 +835,10 @@ Token Δ % = reduction in rewritten-token count vs the raw prompt for that varia
 
 ‡ `tier1+hooks` now routes through the hook engine. `proxy/scripts/run-rewrite.js` instantiates `createEngine()` from `proxy/src/hooks/engine.js`, registers `built-in:context-pressure-reminder` at `request:before-rewrite` and `built-in:tag-bash-read-elisions` at `request:after-rewrite`, and dispatches around the `rewriteRequest()` call. Per-cell records carry `hook_tags`, `hook_timings_ms`, `hook_errors`, and `total_hook_time_ms`; in the smoke run the reminder hook fires on the three fixtures whose stub-tokenized prompt fraction exceeds 0.10 (`code-review`, `mixed-prose-tool`, `tool-heavy`) and tags them with `context-reminder-injected`. Token Δ % matches `tier1-only` because Tier 1 still controls elision and the current built-in handler set is observation-only — it does not change which messages get stubbed. Hook dispatch costs are below the 1ms `Date.now()` resolution per phase. Stream/response phases (`stream:context-trigger`, `response:end`, `response:after-log`) are not exercised by the offline shim — the harness only covers `request:*` phases.
 
-† `tier0-only` and `tier1-only` show identical, no-op results in this run because the current `proxy/src/rewrite.js` does not expose a single-tier mode: Tier 0 (the verbatim window in `verbatim.js`) and Tier 1 (the stub-replace pass in `tier1.js`) are sequential — Tier 0 selects evictable candidates that Tier 1 then stubs. The harness shim approximates "tier-N off" by widening the relevant watermark; with one tier off there are no candidates for the other tier to act on. Now that the hook engine has landed (see `tier1+hooks` row above and `proxy/src/hooks/engine.js`), these single-tier legs become independently meaningful via hook-driven candidate selection — once a built-in hook is registered that runs Tier 1 against an unrestricted candidate set (see compaction-strategy.md §7), the metric will diverge from `tier0+tier1`.
+† `tier0-only` and `tier1-only` show identical, no-op results in this run because
+the current `proxy/src/rewrite.js` applies them sequentially: Tier 0 selects
+evictable candidates and Tier 1 stubs those candidates. The harness approximates
+one tier being disabled by widening its watermark.
 
 The smoke run uses the deterministic chars/4 stub tokenizer; latencies above are pure-CPU rewrite-pipeline numbers (no upstream model call), so the p50/p99 columns reflect rewrite cost only — not end-to-end request latency. The hook-time columns from §11's metric block (`total_hook_time_p50_ms`, `total_hook_time_p99_ms`) are populated by the aggregator from per-cell `total_hook_time_ms`; in this run the dispatcher cost is below the 1ms `Date.now()` floor for every cell, so the aggregate reports 0.0 even though the engine is wired and tagging fires. See `proxy/eval/ab-harness/README.md` for re-running.
 

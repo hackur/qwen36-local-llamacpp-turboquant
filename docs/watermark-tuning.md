@@ -1,9 +1,9 @@
 # Watermark tuning
 
 How to use `scripts/analyze-watermarks.py` to pick a compaction watermark from
-real Phase 0 telemetry. Cross-references
-[`compaction-strategy.md` §11](./compaction-strategy.md#11-open-questions) — the
-"70% is a guess" open question this analyzer is designed to answer.
+real local telemetry. The 70% value in
+[`compaction-strategy.md`](./compaction-strategy.md) is the initial candidate,
+not a measured constant.
 
 ## What the analyzer does
 
@@ -50,9 +50,8 @@ Algorithm (`scripts/analyze-watermarks.py`):
 
 ## Choosing a watermark
 
-Prefer the lowest FPR among watermarks whose `avg_lead` is at least the
-[Tier-3 summarizer wall-clock budget](./compaction-strategy.md#tier-3--prose-summarization-small-model-async)
-in messages (rule of thumb: 3-5 messages on M-series). The script's automatic
+Prefer the lowest FPR among watermarks whose `avg_lead` leaves enough time for
+same-model summarization (rule of thumb: 3-5 messages on this machine). The script's automatic
 suggestion encodes that rule; treat it as a starting point, not an oracle.
 
 ## Real telemetry vs. synthetic
@@ -68,7 +67,7 @@ records still log) for a full week:
    debugging sessions skew filling), and the FPR floor will be model- and
    workload-specific.
 3. Re-run weekly until two consecutive runs agree on the same watermark; that
-   is the value to commit to `compaction-strategy.md` §5.
+   is the value to commit to `proxy/config.yaml` and document here.
 
 ## End-to-end smoke test
 

@@ -1,63 +1,31 @@
 # Security
 
-This repository contains shell scripts and `Makefile` targets that build local
-binaries (`llama.cpp` and a TurboQuant fork) and run a local HTTP inference
-server on `127.0.0.1`. Read the relevant scripts before you run anything that
-makes you nervous.
+The server is a local operator tool, not a network service. Every launcher
+binds to `127.0.0.1` and passes `--cors-origins localhost`.
 
-## Scope
+## Full runtime
 
-In scope:
+The default enables llama.cpp `--agent`. Upstream defines that switch as the
+combination of the WebUI MCP CORS proxy and all built-in tools, including shell
+execution and file writes. Treat the model as a local process acting with your
+user account's permissions:
 
-- A vulnerability in our own code: scripts under `scripts/`, clients under
-  `clients/`, the `Makefile`, our config templates.
-- A privacy regression: any change that re-introduces personal paths,
-  hostnames, or secrets after the static-check linter green-listed them.
-- Anything that causes `llama-server` started by our scripts to make network
-  connections beyond `127.0.0.1` **with `MCP_PROXY` unset**. The
-  `MCP_PROXY=1` opt-in intentionally enables an outbound `/cors-proxy`
-  endpoint for the WebUI's MCP client (see `docs/mcp-integration.md`
-  and `docs/offline-mode.md`). The default-off behavior is the security
-  contract; an unexpected outbound with `MCP_PROXY` unset is a bug.
+- never bind it to `0.0.0.0`;
+- never reverse-proxy it to another machine;
+- review tool calls before accepting them in the WebUI;
+- configure external MCP servers only from trusted local files;
+- use `AGENT=0` for untrusted prompts or strict offline operation.
 
-Out of scope (not this repo's bugs, but the upstream projects' — please file
-there):
+Agent mode can make outbound requests through the MCP proxy when a user or
+tool asks it to. `make start-offline` disables that capability while leaving
+the model, MTP, vision, reasoning, and metrics enabled.
 
-- `llama.cpp` itself: <https://github.com/ggml-org/llama.cpp/issues>
-- `llama-cpp-turboquant` itself: <https://github.com/TheTom/llama-cpp-turboquant/issues>
-- Apple Metal, macOS Gatekeeper, model weights from Hugging Face.
+## Model and dependency trust
 
-## Reporting
+Weights and the projector are not redistributed. `make model-link` links only
+the documented Qwen3.8 artifacts. Engine revisions are exact SHAs in
+`configs/upstream.env`; upgrades are accepted only after local build and live
+validation.
 
-For private disclosure, open a [GitHub security advisory] on the repository.
-Public, low-severity issues can also be filed as regular issues.
-
-[GitHub security advisory]: https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing/privately-reporting-a-security-vulnerability
-
-## What this repo does NOT contain
-
-- Model weights — every GGUF is symlinked from your local LM Studio cache (or
-  a path you specify with `MODELS_ROOT`). Nothing is redistributed.
-- Secrets, API keys, or tokens — clients pass `api_key=no-key` to a local
-  server that doesn't check it.
-- Telemetry — no analytics, no crash reports, no usage pings. Confirm with
-  `make audit-offline`.
-
-## Verifying offline operation yourself
-
-```bash
-make start
-make audit-offline   # → "✓ zero non-localhost sockets — provably offline-clean"
-```
-
-If you ever see that probe fail, please file an issue immediately — that
-would be a regression of the project's headline guarantee.
-
-## Pre-commit / pre-publish check
-
-```bash
-make check        # bash -n on scripts + privacy linter
-make preflight    # tools, builds, model symlinks
-```
-
-Both should be green before any `git push` to a public branch.
+Report project vulnerabilities privately to the repository owner. Report
+llama.cpp or TurboQuant engine vulnerabilities to their upstream projects.

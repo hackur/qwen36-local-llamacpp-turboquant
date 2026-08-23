@@ -26,5 +26,5 @@ projects. Those projects retain their own licenses:
 - llama.cpp (ggml-org/llama.cpp): MIT — https://github.com/ggml-org/llama.cpp/blob/master/LICENSE
 - llama-cpp-turboquant (TheTom/llama-cpp-turboquant, feature/turboquant-kv-cache):
   see upstream for license terms — https://github.com/TheTom/llama-cpp-turboquant
-- Model weights (Qwen, Gemma, GPT-OSS, etc.) are governed by their respective
-  publisher licenses; this repo only references them, never redistributes them.
+- Qwen3.8 model weights are governed by their publisher license; this repo only
+  references the local artifacts and never redistributes them.

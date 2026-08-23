@@ -1,6 +1,6 @@
-// Phase 2 client: small recursive summarizer (docs/compaction-strategy.md §6 Tier 3).
+// Phase 2 same-model summarizer; see docs/compaction-strategy.md.
 //
-// Posts to a second llama-server (default :10503; see scripts/start-summarizer.sh)
+// Posts directly to the Qwen3.8 upstream before forwarding the rewritten request
 // at /v1/chat/completions and returns a single condensed text block. Used by the
 // rewrite pipeline to compress oversized tool-result bodies before Tier 1 falls
 // through to stub-only elision.
@@ -34,7 +34,7 @@ export async function summarize(messages, opts = {}) {
   const logger = opts.logger;
 
   const payload = {
-    model: opts.model || "qwen-compact-summarizer",
+    model: opts.model || "qwen3.8-local",
     messages,
     max_tokens: opts.maxTokens ?? DEFAULT_MAX_TOKENS,
     temperature: 0,

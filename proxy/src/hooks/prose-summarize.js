@@ -37,7 +37,7 @@ export async function handler(ctx, hookConfig = {}) {
     const summary = await summarize(prompt, {
       url,
       timeoutMs: hookConfig.request_timeout_ms ?? 8000,
-      model: hookConfig.model || "qwen-compact-summarizer",
+      model: hookConfig.model || "qwen3.8-local",
       maxTokens: hookConfig.max_tokens ?? 512,
     });
     if (summary) {

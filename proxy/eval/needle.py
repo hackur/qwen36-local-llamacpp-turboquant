@@ -37,7 +37,7 @@ from typing import Any
 PROJECT_ID = "proj-7B3Q-9"
 SECRET_TOKEN = "tok-AABBCC"
 SEED = 0xC0FFEE
-MODEL = "qwen3.6-35b-a3b"  # placeholder; proxy ignores it for fixture replay
+MODEL = "qwen3.8-local"
 
 PLANT = (
     f"FYI, the project ID is `{PROJECT_ID}` and the secret token is "

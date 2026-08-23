@@ -1,4 +1,4 @@
-// Tier 0 verbatim window selection (docs/compaction-strategy.md §6 Tier 0).
+// Tier 0 verbatim window selection; see docs/compaction-strategy.md.
 //
 // Pure function. No I/O, no tokenizer call — token counts are passed in.
 //

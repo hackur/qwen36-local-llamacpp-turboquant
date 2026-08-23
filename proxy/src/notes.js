@@ -1,4 +1,4 @@
-// Tier-2/3 structured notes extractor (docs/compaction-strategy.md §6 Tier 2,
+// Tier-2/3 structured notes extractor (see docs/compaction-strategy.md;
 // Appendix A). For tool-result bodies that are oversized but couldn't be
 // summarized by the Phase 2 small model (offline, etc.), pull out a handful of
 // "memorable" tokens so the agent retains entities, decisions, and key/value

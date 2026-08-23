@@ -20,8 +20,7 @@
 
 <!--
 Placeholders:
-  __REPO__   absolute path to this repository checkout (e.g. /Users/<USER>/code/qwen36-local-llamacpp-turboquant)
-  <USER>     your macOS short username — only relevant inside __REPO__ if it lives under /Users/<USER>/
+  __REPO__   absolute path to this repository checkout
 
 Install:
   sed "s|__REPO__|$(pwd)|g" configs/launchd-plist.template > ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist

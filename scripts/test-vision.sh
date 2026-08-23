@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Send a test image to the vision server (defaults to a tiny PNG we generate).
+# Send a generated image to the unified Qwen3.8 runtime and verify that the
+# same endpoint used for text can perform multimodal inference.
 set -euo pipefail
-PORT="${PORT:-10503}"
+PORT="${PORT:-10501}"
 IMG="${1:-}"
 
 if [[ -z "$IMG" ]]; then

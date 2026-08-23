@@ -102,7 +102,7 @@ def make_record(rng: random.Random, ts: datetime, prompt_tokens: int) -> dict:
     rewrite_fired = rng.random() < 0.05  # rare: most requests passthrough
     rec = {
         "request_id": uuid.UUID(int=rng.getrandbits(128)).hex[:16],
-        "model": "qwen3.6-turboquant",
+        "model": "qwen3.8-local",
         "mode": "turboquant",
         "compact": "off",
         "stream": True,

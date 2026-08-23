@@ -5,7 +5,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
 
 echo "Shell syntax"
-for f in scripts/*.sh Qwen-Offline.command; do
+for f in scripts/*.sh ./*.command; do
   bash -n "$f"
   printf "  ✓ %s\n" "$f"
 done

@@ -1,90 +1,56 @@
 #!/usr/bin/env bash
-# Symlink LM Studio's GGUFs into ./models/ so the project is self-contained
-# without copying ~80 GB. Idempotent — reruns just refresh the links.
-# Adding a new model? Add an entry to MODELS below.
+# Link the only supported artifacts into ./models without copying 28 GiB.
+# Existing non-Qwen3.8 GGUF symlinks in this repository are pruned; their
+# source files in LM Studio or MODELS_ROOT are never modified.
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DRY_RUN=0
-if [[ "${1:-}" == "--dry-run" ]]; then
-  DRY_RUN=1
-fi
+[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
+
+MODELS_ROOT="${MODELS_ROOT:-$HOME/.lmstudio/models}"
+WEIGHT_REL="lmstudio-community/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q8_0.gguf"
+MMPROJ_REL="lmstudio-community/Qwen3.8-27B-GGUF/mmproj-Qwen3.8-27B-BF16.gguf"
+WEIGHT_SRC="$MODELS_ROOT/$WEIGHT_REL"
+MMPROJ_SRC="$MODELS_ROOT/$MMPROJ_REL"
+WEIGHT_LINK="$REPO/models/qwen38-27b.gguf"
+MMPROJ_LINK="$REPO/models/qwen38-27b.mmproj.gguf"
 
 run() {
   if (( DRY_RUN )); then
-    printf "  dry-run: %q" "$1"
-    shift
-    printf " %q" "$@"
-    printf "\n"
+    printf 'dry-run:'
+    printf ' %q' "$@"
+    printf '\n'
   else
     "$@"
   fi
 }
 
-if (( DRY_RUN )); then
-  echo "dry-run: no files will be changed"
-else
-  mkdir -p "$REPO/models"
-fi
+[[ -f "$WEIGHT_SRC" ]] || {
+  echo "missing Qwen3.8 weights: $WEIGHT_SRC" >&2
+  exit 1
+}
+[[ -f "$MMPROJ_SRC" ]] || {
+  echo "missing Qwen3.8 projector: $MMPROJ_SRC" >&2
+  exit 1
+}
 
-# Wipe pre-alias-scheme symlinks (older runs created descriptive names like
-# `Qwen3.6-35B-A3B-Q6_K.gguf` and `mmproj-Qwen3.6-27B.gguf`). Keep only
-# `<alias>.gguf` and `<alias>.mmproj.gguf`.
-for old in "$REPO/models/Qwen3.6-27B-IQ2_XXS.gguf" \
-           "$REPO/models/Qwen3.6-35B-A3B-Q6_K.gguf" \
-           "$REPO/models/mmproj-Qwen3.6-27B.gguf" \
-           "$REPO/models/mmproj-Qwen3.6-35B-A3B.gguf"; do
-  [[ -L "$old" ]] && { run rm -f "$old"; echo "  rm (pre-alias) $(basename "$old")"; }
+run mkdir -p "$REPO/models"
+shopt -s nullglob
+for link in "$REPO"/models/*.gguf; do
+  [[ -L "$link" ]] || continue
+  case "$(basename "$link")" in
+    qwen38-27b.gguf|qwen38-27b.mmproj.gguf) ;;
+    *)
+      echo "pruning legacy project symlink: ${link#$REPO/}"
+      run unlink "$link"
+      ;;
+  esac
 done
 
-# alias  weight-source-relpath                                                                              mmproj-source-relpath (or "" if none)
-MODELS=(
-  "qwen38-27b   lmstudio-community/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q8_0.gguf                                                   lmstudio-community/Qwen3.8-27B-GGUF/mmproj-Qwen3.8-27B-BF16.gguf"
-  "qwen36-neo   DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q5_K_M.gguf  DavidAU/Qwen3.6-27B-Heretic-Uncensored-FINETUNE-NEO-CODE-Di-IMatrix-MAX-GGUF/mmproj-F32.gguf"
-  "qwen36-35b   lmstudio-community/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-Q6_K.gguf                                       lmstudio-community/Qwen3.6-35B-A3B-GGUF/mmproj-Qwen3.6-35B-A3B-BF16.gguf"
-  "qwen36-27b   unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-IQ2_XXS.gguf                                                    unsloth/Qwen3.6-27B-GGUF/mmproj-F32.gguf"
-  "qwen36-mtp   unsloth/Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf                                                unsloth/Qwen3.6-27B-MTP-GGUF/mmproj-F32.gguf"
-  "gemma4-26b   lmstudio-community/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-Q4_K_M.gguf                               lmstudio-community/gemma-4-26B-A4B-it-GGUF/mmproj-gemma-4-26B-A4B-it-BF16.gguf"
-  "gemma4-e4b   lmstudio-community/gemma-4-E4B-it-GGUF/gemma-4-E4B-it-Q8_0.gguf                                         lmstudio-community/gemma-4-E4B-it-GGUF/mmproj-gemma-4-E4B-it-BF16.gguf"
-  "gpt-oss-20b  lmstudio-community/gpt-oss-20b-GGUF/gpt-oss-20b-MXFP4.gguf                                              "
-  "qwen35-9b    lmstudio-community/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q8_0.gguf                                                 lmstudio-community/Qwen3.5-9B-GGUF/mmproj-Qwen3.5-9B-BF16.gguf"
-  "crow-9b      mradermacher/Crow-9B-Opus-4.6-Distill-Heretic_Qwen3.5-GGUF/Crow-9B-Opus-4.6-Distill-Heretic_Qwen3.5.Q4_K_S.gguf  mradermacher/Crow-9B-Opus-4.6-Distill-Heretic_Qwen3.5-GGUF/Crow-9B-Opus-4.6-Distill-Heretic_Qwen3.5.mmproj-f16.gguf"
-  "nemotron-4b  lmstudio-community/NVIDIA-Nemotron-3-Nano-4B-GGUF/NVIDIA-Nemotron-3-Nano-4B-Q4_K_M.gguf                 "
-  "tiny         TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf                             "
-  "qwen3.5-0.8b unsloth/Qwen3.5-0.8B-GGUF/Qwen3.5-0.8B-Q8_0.gguf                                                       "
-  "qwen3.5-9b-abliterated-journalist  tomvaillant/qwen3.5-9b-abliterated-journalist-GGUF/model-q4_k_m.gguf             "
-)
+run ln -sfn "$WEIGHT_SRC" "$WEIGHT_LINK"
+run ln -sfn "$MMPROJ_SRC" "$MMPROJ_LINK"
 
-# Where to look for the upstream GGUFs. Defaults to LM Studio's cache; override
-# for users who downloaded with `huggingface-cli` or to a custom location:
-#   MODELS_ROOT=/path/to/your/ggufs ./scripts/symlink-models.sh
-LMSTUDIO_ROOT="${MODELS_ROOT:-$HOME/.lmstudio/models}"
-ok=0; missing=0
-for entry in "${MODELS[@]}"; do
-  read -r alias weight mmproj <<< "$entry"
-  src="$LMSTUDIO_ROOT/$weight"
-  if [[ -f "$src" ]]; then
-    run ln -sf "$src" "$REPO/models/$alias.gguf"
-    printf "  %-13s ./models/%s.gguf\n" "$alias" "$alias"
-    ok=$((ok+1))
-  else
-    printf "  %-13s (skip — not in LM Studio: %s)\n" "$alias" "$weight"
-    [[ -L "$REPO/models/$alias.gguf" ]] && run rm -f "$REPO/models/$alias.gguf"
-    [[ -L "$REPO/models/$alias.mmproj.gguf" ]] && run rm -f "$REPO/models/$alias.mmproj.gguf"
-    missing=$((missing+1))
-    continue
-  fi
-  if [[ -n "${mmproj:-}" ]]; then
-    msrc="$LMSTUDIO_ROOT/$mmproj"
-    if [[ -f "$msrc" ]]; then
-      run ln -sf "$msrc" "$REPO/models/$alias.mmproj.gguf"
-      printf "                ./models/%s.mmproj.gguf\n" "$alias"
-    fi
-  fi
-done
-
-echo
-if (( DRY_RUN )); then
-  echo "✓ would link $ok models ($missing missing). Use them via: MODEL=<alias> ./scripts/start-turboquant.sh"
-else
-  echo "✓ linked $ok models ($missing missing). Use them via: MODEL=<alias> ./scripts/start-turboquant.sh"
-fi
+echo "Qwen3.8 project artifacts:"
+echo "  models/qwen38-27b.gguf -> $WEIGHT_SRC"
+echo "  models/qwen38-27b.mmproj.gguf -> $MMPROJ_SRC"
+(( DRY_RUN )) && echo "No files were changed."

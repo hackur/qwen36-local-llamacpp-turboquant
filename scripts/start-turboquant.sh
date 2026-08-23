@@ -1,126 +1,44 @@
 #!/usr/bin/env bash
-# Start the primary TurboQuant llama-server on :10501.
-# Qwen3.8 defaults to native 262K context, TurboQuant KV, and embedded MTP.
+# Start the complete Qwen3.8 runtime on port 10501.
+#
+# Enabled by default: Q8_0 weights, q8_0/turbo3 KV, native 262K context,
+# adaptive chained MTP, the BF16 vision projector, preserved reasoning,
+# Prometheus metrics, WebUI MCP proxy, and all llama.cpp built-in agent tools.
+# Use environment overrides from configs/runtime.env only for controlled tests.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_common.sh"
 
-DRY_RUN=0
-if [[ "${1:-}" == "--dry-run" ]]; then
-  DRY_RUN=1
-fi
+case "${1:-}" in
+  -h|--help) print_help_from_header; exit 0 ;;
+  --dry-run) DRY_RUN=1 ;;
+  "") DRY_RUN=0 ;;
+  *) die "unknown argument: $1" ;;
+esac
 
-PORT="${PORT:-10501}"
-MODEL_INPUT="${MODEL:-$MODEL_PRIMARY_ALIAS}"
-BIN="$REPO/vendor/llama-cpp-turboquant/build/bin/llama-server"
-LOG="$REPO/logs/turboquant.log"
+ensure_executable "$TURBOQUANT_BIN" "run: make build"
+ensure_artifacts
+HELP_OUT="$(server_help "$TURBOQUANT_BIN")"
+require_help_flag "$HELP_OUT" "turbo3"
+append_runtime_features "$HELP_OUT" full
+RUNTIME_FLAGS+=(--cache-type-k "$KV_K" --cache-type-v "$KV_V")
 
-[[ -x "$BIN" ]] || { echo "❌ TurboQuant fork not built. Run scripts/build-llama.sh"; exit 1; }
-resolve_model "$MODEL_INPUT"
-MODEL="$RESOLVED_MODEL"
-ensure_model "$MODEL"
+LOG="$REPO/logs/qwen38.log"
+CMD=(env TURBO_LAYER_ADAPTIVE=1 "$TURBOQUANT_BIN" "${RUNTIME_FLAGS[@]}")
 
-# Per-model defaults for CTX / KV / RoPE. Anything already in env wins; the
-# rest is filled from configs/model-defaults.env. See that file for guidance
-# on adding a new alias or extending ctx past n_ctx_train via YaRN.
-load_model_defaults "$MODEL_INPUT"
-CTX="${CTX:-131072}"
-KV="${KV:-turbo3}"   # turbo2 / turbo3 / turbo4 / q8_0 / q4_0 / f16
-
-# Skip port-guard on dry-run — we never actually bind, and a busy port shouldn't
-# stop a `--dry-run` from previewing the command line.
-if (( ! DRY_RUN )); then
-  ensure_no_other_llama_server
-  ensure_port_free "$PORT"
-fi
-mkdir -p "$REPO/logs"
-
-# Probe the binary for the requested cache type.
-# Note: we capture help into a variable first — `cmd | grep -q` closes stdin
-# after the first match, the binary gets SIGPIPE on its next write, and with
-# `set -o pipefail` that turns into a false "not found" verdict.
-HELP_OUT=$("$BIN" -h 2>&1 || true)
-if ! grep -q -- "$KV" <<< "$HELP_OUT"; then
-  echo "⚠  '$KV' not in this build's --cache-type help."
-  echo "   Available cache types in this build:"
-  grep -A2 -i "cache.type" <<< "$HELP_OUT" | head -10
-  echo "   Falling back to KV=q8_0"
-  KV=q8_0
-fi
-
-# mixed-kv-guard:v1 — derive KV_K / KV_V from KV (unless overridden) and warn on mismatch.
-apply_kv_split
-
-# Optional YaRN RoPE flags. Empty array if no scaling requested.
-# shellcheck disable=SC2207
-ROPE_FLAGS=( $(rope_args) )
-
-# Froggeric Qwen-Fixed-Chat-Templates v19 for Qwen 3.5/3.6 aliases (no-op otherwise).
-# shellcheck disable=SC2207
-TEMPLATE_FLAGS=( $(chat_template_flags "$MODEL_INPUT") )
-
-# MCP CORS proxy — set MCP_PROXY=1 to enable in-WebUI MCP server access.
-# Off by default; breaks offline guarantee when on. See docs/mcp-integration.md.
-# shellcheck disable=SC2207
-MCP_FLAGS=( $(mcp_proxy_flag "$BIN") )
-
-# Qwen3.8 carries an embedded MTP head. Current TurboQuant supports it directly
-# and measured ~2x faster generation on this M3 Max. MTP=0 disables it.
-MTP_FLAGS=()
-MTP_DESC=""
-if [[ "$MODEL_INPUT" == "qwen38-27b" && "${MTP:-1}" != "0" ]]; then
-  grep -q "draft-mtp" <<< "$HELP_OUT" || {
-    echo "❌ This TurboQuant build does not support Qwen3.8 embedded MTP. Run make upgrade." >&2
-    exit 1
-  }
-  SPEC_N_MAX="${SPEC_N_MAX:-3}"
-  SPEC_P_MIN="${SPEC_P_MIN:-0.5}"
-  MTP_FLAGS=(--spec-type draft-mtp --spec-draft-n-max "$SPEC_N_MAX" --spec-draft-p-min "$SPEC_P_MIN")
-  MTP_DESC=" mtp=${SPEC_N_MAX}@${SPEC_P_MIN}"
-fi
-
-# metrics-opt-in:v1 — set METRICS=1 to enable Prometheus /metrics endpoint.
-METRICS_FLAGS=()
-if [[ "${METRICS:-0}" == "1" || "${METRICS:-0}" == "true" ]]; then
-  METRICS_FLAGS=(--metrics)
-fi
-
-ROPE_DESC=""
-[[ -n "${ROPE_SCALING:-}" ]] && ROPE_DESC=" rope=${ROPE_SCALING}@${ROPE_SCALE:-1.0}x(orig=${YARN_ORIG_CTX:-?})"
-
-KV_DESC="$KV_K"; [[ "$KV_K" != "$KV_V" ]] && KV_DESC="${KV_K}/${KV_V}"
-echo "▶ turboquant @ http://127.0.0.1:$PORT  (model=$MODEL_INPUT, KV=$KV_DESC, ${CTX} ctx${MTP_DESC}${ROPE_DESC})"
-echo "  TURBO_LAYER_ADAPTIVE=1   log → $LOG"
 if (( DRY_RUN )); then
-  printf "dry-run:"
-  printf " %q" TURBO_LAYER_ADAPTIVE=1 exec "$BIN" \
-    -m "$MODEL" \
-    --port "$PORT" \
-    -c "$CTX" \
-    -ctk "$KV_K" -ctv "$KV_V" \
-    "${COMMON[@]}" \
-    "${SAMPLING[@]}" \
-    ${ROPE_FLAGS[@]+"${ROPE_FLAGS[@]}"} \
-    ${TEMPLATE_FLAGS[@]+"${TEMPLATE_FLAGS[@]}"} \
-    ${MCP_FLAGS[@]+"${MCP_FLAGS[@]}"} \
-    ${MTP_FLAGS[@]+"${MTP_FLAGS[@]}"} \
-    ${METRICS_FLAGS[@]+"${METRICS_FLAGS[@]}"} \
-    --alias qwen3.8-turboquant
-  printf " 2>&1 | tee %q\n" "$LOG"
+  print_command "${CMD[@]}"
   exit 0
 fi
 
-TURBO_LAYER_ADAPTIVE=1 exec "$BIN" \
-  -m "$MODEL" \
-  --port "$PORT" \
-  -c "$CTX" \
-  -ctk "$KV_K" -ctv "$KV_V" \
-  "${COMMON[@]}" \
-  "${SAMPLING[@]}" \
-  ${ROPE_FLAGS[@]+"${ROPE_FLAGS[@]}"} \
-  ${TEMPLATE_FLAGS[@]+"${TEMPLATE_FLAGS[@]}"} \
-  ${MCP_FLAGS[@]+"${MCP_FLAGS[@]}"} \
-  ${MTP_FLAGS[@]+"${MTP_FLAGS[@]}"} \
-  ${METRICS_FLAGS[@]+"${METRICS_FLAGS[@]}"} \
-  --alias qwen3.8-turboquant \
-  2>&1 | tee "$LOG"
+ensure_no_other_llama_server
+ensure_port_free "$PORT"
+preflight_memory
+mkdir -p "$REPO/logs"
+
+echo "Starting Qwen3.8 full runtime on http://127.0.0.1:$PORT"
+echo "  model=$MODEL_FILE"
+echo "  context=$CTX kv=$KV_K/$KV_V mtp=$MTP_TYPE:$MTP_MIN-$MTP_MAX chain=$MTP_CHAIN"
+echo "  vision=on reasoning-preserve=$REASONING_PRESERVE metrics=$METRICS agent=$AGENT"
+echo "  log=$LOG"
+exec "${CMD[@]}" 2>&1 | tee "$LOG"

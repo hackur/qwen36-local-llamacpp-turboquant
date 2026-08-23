@@ -1,29 +1,18 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "provider": {
-    "llama.cpp": {
+    "qwen38-local": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Local llama.cpp (turboquant)",
+      "name": "Qwen3.8 local · TurboQuant · MTP · vision · 262K",
       "options": { "baseURL": "http://127.0.0.1:10501/v1" },
       "models": {
-        "qwen3.8-turboquant": {
-          "name": "Qwen3.8-27B Q8 (primary) · TurboQuant + MTP · 262K",
-          "limit": { "context": 262144, "output": 32000 }
-        }
-      }
-    },
-    "llama.cpp-baseline": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "Local llama.cpp (baseline)",
-      "options": { "baseURL": "http://127.0.0.1:10500/v1" },
-      "models": {
-        "qwen3.8-baseline": {
-          "name": "Qwen3.8-27B Q8 · f16 KV · 32K",
-          "limit": { "context": 32768, "output": 16000 }
+        "qwen3.8-local": {
+          "name": "Qwen3.8-27B Q8_0 full runtime",
+          "limit": { "context": 262144, "output": 32768 }
         }
       }
     }
   },
-  "model": "llama.cpp/qwen3.8-turboquant",
+  "model": "qwen38-local/qwen3.8-local",
   "permission": { "*": "allow" }
 }

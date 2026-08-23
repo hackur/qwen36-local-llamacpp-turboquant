@@ -45,7 +45,7 @@ except Exception:
 # ── ENVIRONMENT ─────────────────────────────────────────────────────────────
 draw() {
   clear 2>/dev/null || printf '\ec'
-  printf "${C_BOLD}${C_MAG}Qwen Local Stack — Info${C_R}     ${C_DIM}%s${C_R}\n" "$(date '+%Y-%m-%d %H:%M:%S')"
+  printf "${C_BOLD}${C_MAG}Qwen3.8 Local Runtime — Info${C_R}     ${C_DIM}%s${C_R}\n" "$(date '+%Y-%m-%d %H:%M:%S')"
 
   hdr "ENVIRONMENT"
   kv "repo"      "$REPO"
@@ -62,7 +62,7 @@ draw() {
 
   # ── SERVERS ────────────────────────────────────────────────────────────
   hdr "SERVERS"
-  for entry in "10500:baseline (mainline f16)" "10501:turboquant (turbo3)" "10502:fallback (q8_0)" "10503:vision" "1234:LM Studio"; do
+  for entry in "10501:Qwen3.8 full runtime" "10500:Qwen3.8 baseline"; do
     local port="${entry%%:*}" label="${entry#*:}"
     if curl -sf --max-time 1 "http://127.0.0.1:$port/health" >/dev/null 2>&1; then
       local pid; pid=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | head -1)

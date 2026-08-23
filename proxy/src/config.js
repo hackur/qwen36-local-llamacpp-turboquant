@@ -40,7 +40,7 @@ const DEFAULTS = {
     mode: "off",
     request_timeout_ms: 8000,
     max_tokens: 512,
-    model: "qwen-compact-summarizer",
+    model: "qwen3.8-local",
   },
   // Phase 3 — KV stable-prefix discipline + session keying. Off by default;
   // when off, the request path is byte-identical to Phase 0/1/2.

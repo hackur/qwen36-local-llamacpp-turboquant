@@ -1,234 +1,124 @@
-# Convenience targets. `make` (no args) prints help.
+# Local-only Qwen3.8 operations. No target creates or depends on hosted CI.
 SHELL := bash
 .DEFAULT_GOAL := help
 
-.PHONY: help build upgrade start start-baseline start-tiny start-nemotron start-crow \
-        start-gemma4-e4b start-qwen35-9b start-gpt-oss start-gemma4-26b start-qwen38 start-vision start-qwen36-27b start-qwen36-neo start-qwen36-mtp start-journalist \
-        start-embed \
-        stop status info info-watch bench bench-suite bench-tui mcp-fs mcp-git mcp-time needle demo open preflight check \
-        install-launchd uninstall-launchd clean audit-offline models \
-        proxy-install proxy-test proxy-start proxy-smoke \
-        privacy-scan prepush quarterly-audit
+.PHONY: help build upgrade model-link preflight check start start-foreground \
+	start-offline start-baseline stop status info bench bench-suite bench-tui \
+	needle quality vision demo open proxy-install proxy-test proxy-start \
+	proxy-smoke analyze-watermarks privacy-scan prepush quarterly-audit \
+	audit-offline install-launchd uninstall-launchd clean
 
 help:
 	@awk 'BEGIN{FS=":.*##"; printf "Targets:\n"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-build: ## Build mainline + TurboQuant llama.cpp (Metal). Idempotent.
+build: ## Build pinned mainline and TurboQuant llama.cpp engines with Metal
 	./scripts/build-llama.sh
 
-upgrade: ## Update both engine branches to current tips and rebuild
+upgrade: ## Fetch current engine branch tips, rebuild, and print candidate pins
 	./scripts/upgrade.sh
 
-preflight: ## Check tools, builds, and model symlinks without starting a server
+model-link: ## Link only Qwen3.8 Q8_0 weights and its BF16 projector
+	./scripts/symlink-models.sh
+
+preflight: ## Validate tools, engines, model artifacts, and required server flags
 	./scripts/preflight.sh
 
-check: ## Run static checks that do not need models or network
+check: ## Run all local static and unit checks without starting the model
 	./scripts/static-check.sh
 
-start: ## Start TurboQuant server in background (port 10501)
+start: ## Start the complete Qwen3.8 runtime in the background on :10501
 	@if curl -sf --max-time 1 http://127.0.0.1:10501/health >/dev/null 2>&1; then \
-		echo "already up on :10501"; \
+		echo "Qwen3.8 is already running on :10501"; \
 	else \
 		mkdir -p logs; \
-		./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 & \
-		echo "starting; log → logs/turboquant.log"; \
+		./scripts/start-turboquant.sh > logs/qwen38.log 2>&1 & \
+		echo "starting Qwen3.8; log -> logs/qwen38.log"; \
 	fi
 
-start-qwen38: start ## Start Qwen3.8-27B Q8 with TurboQuant + embedded MTP (current DEFAULT)
+start-foreground: ## Start the complete Qwen3.8 runtime in the foreground
+	./scripts/start-turboquant.sh
 
-start-vision: ## Start Qwen3.8 vision server without experimental MTP (port 10503)
-	@mkdir -p logs
-	MODEL=qwen38-27b ./scripts/start-vision.sh > logs/vision.log 2>&1 &
+start-offline: ## Start Qwen3.8 without agent tools or the WebUI MCP proxy
+	AGENT=0 ./scripts/start-turboquant.sh
 
-start-baseline: ## Start mainline f16 baseline (port 10500)
-	@mkdir -p logs
-	./scripts/start-baseline.sh > logs/baseline.log 2>&1 &
+start-baseline: ## Start the same Qwen3.8 model on mainline with f16 KV and no MTP
+	PORT=10500 CTX=32768 ./scripts/start-baseline.sh
 
-models: ## List all available model aliases
-	./scripts/list-models.sh
-
-start-tiny: ## Start TinyLlama 1.1B (smoke test, ~700 MB) — turbo3 unsupported, uses q8_0
-	@mkdir -p logs
-	MODEL=tiny CTX=2048 KV=q8_0 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
-
-start-nemotron: ## Start Nemotron-3 Nano 4B (~2.8 GB)
-	@mkdir -p logs
-	MODEL=nemotron-4b CTX=8192 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
-
-start-crow: ## Start Crow-9B (Qwen3.5 distill, ~5 GB)
-	@mkdir -p logs
-	MODEL=crow-9b CTX=16384 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
-
-start-gemma4-e4b: ## Start Gemma 4 E4B (small, ~8 GB)
-	@mkdir -p logs
-	MODEL=gemma4-e4b CTX=16384 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
-
-start-qwen35-9b: ## Start Qwen 3.5 9B Q8_0 (~9.5 GB)
-	@mkdir -p logs
-	MODEL=qwen35-9b CTX=32768 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
-
-start-gpt-oss: ## Start GPT-OSS 20B MXFP4 — turbo3 unsupported on MXFP4 weights, uses q8_0
-	@mkdir -p logs
-	MODEL=gpt-oss-20b CTX=32768 KV=q8_0 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
-
-start-gemma4-26b: ## Start Gemma 4 26B-A4B (~17 GB MoE)
-	@mkdir -p logs
-	MODEL=gemma4-26b CTX=32768 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
-
-start-qwen36-27b: ## Start Qwen 3.6 27B IQ2_XXS (~9 GB dense)
-	@mkdir -p logs
-	MODEL=qwen36-27b CTX=32768 ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
-
-start-qwen36-neo: ## Start legacy Qwen 3.6 27B NEO-CODE Heretic Q5_K_M (~19.5 GB dense)
-	@mkdir -p logs
-	MODEL=qwen36-neo ./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 &
-
-start-qwen36-mtp: ## Start Qwen 3.6 27B MTP UD-Q4_K_XL on mainline (~18 GB dense, MTP draft, port 10502)
-	@mkdir -p logs
-	./scripts/start-qwen36-mtp.sh > logs/qwen36-mtp.log 2>&1 &
-
-start-journalist: ## Start Qwen3.5-9B-abliterated-journalist Q4_K_M as sidecar on :10503 (~5.6 GB, OSINT)
-	@mkdir -p logs
-	PORT=10503 MODEL=qwen3.5-9b-abliterated-journalist ./scripts/start-turboquant.sh > logs/journalist.log 2>&1 &
-
-start-embed: ## Start embeddings companion server (port 10510). Needs ./models/embed.gguf or MODEL=/path
-	@mkdir -p logs
-	./scripts/start-embed.sh > logs/embed.log 2>&1 &
-
-stop: ## Stop all llama-server processes from this repo
+stop: ## Stop llama-server processes launched from this repository
 	./scripts/stop-all.sh
 
-status: ## What's running and where (terse)
+status: ## Show Qwen3.8 full and baseline server status
 	./scripts/status.sh
 
-info: ## Full one-shot info dashboard (env, server, memory, network, disk, launchd, last bench)
+info: ## Show the full local runtime dashboard
 	./scripts/info.sh
 
-info-watch: ## Same as `info`, refreshing every 2 s
-	./scripts/info.sh --watch
+bench: ## Benchmark the running Qwen3.8 server on :10501
+	python3 scripts/bench.py 10501 "qwen38-full"
 
-bench: ## Run A/B benchmark (assumes both servers up)
-	python3 scripts/bench.py 10500 "baseline" || true
-	python3 scripts/bench.py 10501 "turboquant" || true
-
-bench-suite: ## Run a bench suite headless. SUITE=benchmarks/suites/qwen36-family.yaml
-	@SUITE="$${SUITE:-benchmarks/suites/qwen36-family.yaml}"; \
-	echo "▶ $$SUITE  (one server at a time — thermal)"; \
+bench-suite: ## Run the Qwen3.8 feature suite headlessly
+	@SUITE="$${SUITE:-benchmarks/suites/qwen38-features.yaml}"; \
 	python3 scripts/bench_runner.py run "$$SUITE"
 
-bench-tui: ## Interactive TUI for a bench suite (textual). SUITE=… or RUN_DIR=…
+bench-tui: ## Run or attach to the Qwen3.8 benchmark TUI
 	@if [[ -n "$$RUN_DIR" ]]; then \
-	  python3 scripts/bench_tui.py "$$RUN_DIR"; \
-	elif [[ -n "$$SUITE" ]]; then \
-	  python3 scripts/bench_tui.py "$$SUITE" --spawn; \
+		.venv/bin/python scripts/bench_tui.py "$$RUN_DIR"; \
 	else \
-	  python3 scripts/bench_tui.py --latest; \
+		SUITE="$${SUITE:-benchmarks/suites/qwen38-features.yaml}"; \
+		.venv/bin/python scripts/bench_tui.py "$$SUITE" --spawn; \
 	fi
 
-mcp-fs: ## MCP filesystem bridge (sandboxed to repo, :4001). Add http://127.0.0.1:4001/mcp in WebUI.
-	./scripts/mcp-bridge.sh fs
-
-mcp-git: ## MCP git bridge (sandboxed to repo, :4003).
-	./scripts/mcp-bridge.sh git
-
-mcp-time: ## MCP time bridge (:4002).
-	./scripts/mcp-bridge.sh time
-
-needle: ## Long-context recall test on TurboQuant
+needle: ## Run a 50K-token long-context recall probe against Qwen3.8
 	python3 scripts/needle.py 50000
 
-demo: ## Terminal chat REPL
+quality: ## Run deterministic text quality checks against Qwen3.8
+	./scripts/quality-check.sh
+
+vision: ## Run the multimodal smoke test against the unified Qwen3.8 server
+	./scripts/test-vision.sh
+
+demo: ## Open the terminal chat client against Qwen3.8
 	PORT=10501 ./scripts/demo-chat.sh
 
-open: ## Open the web demo in your browser
-	open clients/web-demo.html
+open: ## Open the bundled browser client
+	open http://127.0.0.1:10501/
 
-install-launchd: ## Install launchd auto-start (always-on offline)
-	launchctl unload ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist 2>/dev/null || true
-	rm -f ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
-	sed "s|__REPO__|$(CURDIR)|g" configs/launchd-plist.template \
-		> ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
-	launchctl load ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
-	@echo "✓ installed. server will start at login. status: launchctl list | grep qwen"
-
-uninstall-launchd: ## Remove launchd auto-start
-	launchctl unload ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist 2>/dev/null || true
-	rm -f ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
-	launchctl unload ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist 2>/dev/null || true
-	rm -f ~/Library/LaunchAgents/com.local.qwen3-6.turboquant.plist
-	@echo "✓ uninstalled"
-
-clean: ## Wipe build artifacts (does NOT delete vendor/ source)
-	rm -rf vendor/llama.cpp-mainline/build vendor/llama-cpp-turboquant/build
-	@echo "✓ build dirs removed. run 'make build' to rebuild."
-
-proxy-install: ## Install compaction proxy npm dependencies
+proxy-install: ## Install compaction proxy dependencies
 	cd proxy && npm install
 
-proxy-test: ## Run compaction proxy unit + stub-upstream tests
+proxy-test: ## Run all compaction proxy tests
 	cd proxy && npm test
 
-proxy-start: ## Start compaction proxy on :11500 (foreground, forwards to :10501)
+proxy-start: ## Start the compaction proxy on :11500
 	cd proxy && npm start
 
-proxy-smoke: ## Best-effort end-to-end smoke: llama-server + proxy + needle + curl
-	@set -e; \
-	mkdir -p logs; \
-	started_server=0; started_proxy=0; \
-	if curl -sf --max-time 1 http://127.0.0.1:10501/health >/dev/null 2>&1; then \
-		echo "▶ llama-server already up on :10501"; \
-	else \
-		echo "▶ starting llama-server (turboquant)"; \
-		./scripts/start-turboquant.sh > logs/turboquant.log 2>&1 & \
-		started_server=$$!; \
-		for i in $$(seq 1 60); do \
-			curl -sf --max-time 1 http://127.0.0.1:10501/health >/dev/null 2>&1 && break; \
-			sleep 1; \
-		done; \
-	fi; \
-	if curl -sf --max-time 1 http://127.0.0.1:11500/health >/dev/null 2>&1; then \
-		echo "▶ proxy already up on :11500"; \
-	else \
-		echo "▶ starting proxy on :11500"; \
-		(cd proxy && npm start > ../logs/proxy.log 2>&1) & \
-		started_proxy=$$!; \
-		for i in $$(seq 1 30); do \
-			curl -sf --max-time 1 http://127.0.0.1:11500/health >/dev/null 2>&1 && break; \
-			sleep 1; \
-		done; \
-	fi; \
-	trap 'if [[ $$started_proxy -ne 0 ]]; then kill $$started_proxy 2>/dev/null || true; fi; \
-	      if [[ $$started_server -ne 0 ]]; then kill $$started_server 2>/dev/null || true; fi' EXIT; \
-	echo "▶ regenerating needle fixture"; \
-	python3 proxy/eval/needle.py generate --out proxy/eval/fixtures/needle_50turns.jsonl >/dev/null; \
-	echo "▶ curl round-trip via :11500"; \
-	curl -sf http://127.0.0.1:11500/v1/chat/completions \
-		-H "Content-Type: application/json" \
-		-d '{"model":"local","messages":[{"role":"user","content":"Reply with the single word OK."}],"max_tokens":20,"chat_template_kwargs":{"enable_thinking":false}}' \
-		| python3 -c 'import json,sys; r=json.loads(sys.stdin.read(),strict=False); print("✓ proxy reply:", r["choices"][0]["message"]["content"].strip())'; \
-	echo "▶ tail of today's JSONL log:"; \
-	logf="$$HOME/.cache/qwen-compact/logs/$$(date +%Y-%m-%d).jsonl"; \
-	if [[ -f "$$logf" ]]; then tail -1 "$$logf"; else echo "(no log file yet at $$logf)"; fi
+proxy-smoke: ## Run proxy integration checks against the live Qwen3.8 runtime
+	./proxy/tests/integration.sh
 
-analyze-watermarks: ## Analyze Phase 0 proxy telemetry to recommend a compaction watermark
-	@python3 ./scripts/analyze-watermarks.py $(ARGS)
+analyze-watermarks: ## Analyze compaction telemetry
+	python3 scripts/analyze-watermarks.py
 
-privacy-scan: ## Grep tree for personal paths, names, and credential-shaped strings
+privacy-scan: ## Check tracked public content for private paths or credentials
 	./scripts/privacy-scan.sh
 
-prepush: ## Pre-push gate — must be green before any public push
-	@$(MAKE) privacy-scan
+prepush: ## Run the complete local pre-push gate
+	./scripts/static-check.sh && cd proxy && npm test
 
-quarterly-audit: ## Run the quarterly offline re-validation (sockets + symlinks + privacy)
+quarterly-audit: ## Revalidate model links, engine pins, and offline behavior
 	./scripts/quarterly-audit.sh
 
-audit-offline: ## Confirm llama-server has zero non-localhost sockets
-	@PID=$$(pgrep -f vendor/llama-cpp-turboquant.*llama-server | head -1); \
-	if [[ -z "$$PID" ]]; then echo "no turboquant server running"; exit 1; fi; \
-	echo "▶ checking PID $$PID"; \
-	non_local=$$(lsof -nP -p $$PID 2>/dev/null | grep -E "TCP|UDP" | grep -vE "127\.0\.0\.1|\[::1\]" || true); \
-	if [[ -z "$$non_local" ]]; then \
-		echo "✓ zero non-localhost sockets — provably offline-clean"; \
-	else \
-		echo "✗ non-localhost sockets found:"; echo "$$non_local"; exit 1; \
-	fi
+audit-offline: ## Report non-loopback sockets held by the running server
+	./scripts/info.sh --audit-offline
+
+install-launchd: ## Install the Qwen3.8 full runtime as a login agent
+	@mkdir -p "$$HOME/Library/LaunchAgents"
+	sed "s|__REPO__|$(CURDIR)|g" configs/launchd-plist.template > "$$HOME/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist"
+	launchctl unload "$$HOME/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist" 2>/dev/null || true
+	launchctl load "$$HOME/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist"
+
+uninstall-launchd: ## Remove the Qwen3.8 login agent
+	launchctl unload "$$HOME/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist" 2>/dev/null || true
+	trash "$$HOME/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist" 2>/dev/null || true
+
+clean: ## Move generated engine builds to the Trash
+	trash vendor/llama.cpp-mainline/build vendor/llama-cpp-turboquant/build

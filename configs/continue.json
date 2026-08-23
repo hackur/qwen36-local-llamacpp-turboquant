@@ -1,27 +1,20 @@
 {
   "models": [
     {
-      "title": "Qwen 3.8 TurboQuant + MTP (local)",
+      "title": "Qwen3.8 full local runtime",
       "provider": "openai",
-      "model": "local",
+      "model": "qwen3.8-local",
       "apiBase": "http://127.0.0.1:10501/v1",
-      "apiKey": "no-key",
+      "apiKey": "local-only",
       "contextLength": 262144
-    },
-    {
-      "title": "Qwen 3.8 baseline (local)",
-      "provider": "openai",
-      "model": "local",
-      "apiBase": "http://127.0.0.1:10500/v1",
-      "apiKey": "no-key",
-      "contextLength": 32768
     }
   ],
   "tabAutocompleteModel": {
-    "title": "Qwen 3.8 (local)",
+    "title": "Qwen3.8 local",
     "provider": "openai",
-    "model": "local",
+    "model": "qwen3.8-local",
     "apiBase": "http://127.0.0.1:10501/v1",
-    "apiKey": "no-key"
+    "apiKey": "local-only",
+    "contextLength": 262144
   }
 }

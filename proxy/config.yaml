@@ -1,4 +1,4 @@
-# qwen-compact-proxy configuration (Phase 0).
+# Qwen3.8 compaction proxy configuration.
 #
 # Phase 0 is passthrough only. Watermark / mode plumbing exists so Phase 1
 # can plug in compaction without a config break.
@@ -44,8 +44,8 @@ tokenizer:
 # pino log level for the process logger (stdout). Per-request JSONL is separate.
 log_level: "info"
 
-# Phase 2 recursive summarizer (Tier 3). Off by default. Set `url` to enable —
-# scripts/start-summarizer.sh launches the small model on :10503.
+# Phase 2 recursive summarizer (Tier 3). The same Qwen3.8 server can summarize
+# before the proxy forwards the rewritten request, so no sidecar model exists.
 #   off|passthrough — never call (default).
 #   shadow          — call and log; do NOT replace the tool-result body.
 #   enforce         — replace oversized tool-result bodies with the summary
@@ -56,13 +56,7 @@ summarizer:
   mode: "off"
   request_timeout_ms: 8000
   max_tokens: 512
-  model: "qwen-compact-summarizer"
-  # Recommendation (task #42): nemotron-4b — see
-  #   benchmarks/summarizer-bench-20260507-215050.md
-  # Faster than gemma4-e4b (~43 vs ~33 gen tok/s), ~3× smaller VRAM (~2.8 GB),
-  # quality near-tie on entity / decision / unresolved-question capture across
-  # all five fixtures. tiny produced token-salad on every fixture — do not use.
-  # Default left unchanged; flip to nemotron-4b when wiring Phase 2 end-to-end.
+  model: "qwen3.8-local"
 
 # Phase 3 — KV stable-prefix discipline + session keying.
 # When `enabled: false` (default) the proxy is byte-identical to Phase 0/1/2.

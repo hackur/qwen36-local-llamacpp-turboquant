@@ -13,6 +13,7 @@ __pycache__/
 # Editor / OS
 .cursor/
 .claude/
+.playwright-mcp/
 
 # Personal credentials — never commit
 .env

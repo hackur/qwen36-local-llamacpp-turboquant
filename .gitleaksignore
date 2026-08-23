@@ -1,0 +1,2 @@
+# False positive: `sed -u` in a curl streaming example is parsed as curl auth.
+c4cd31368390ace19b634a54d0d887156b67154d:docs/usage.md:curl-auth-user:257

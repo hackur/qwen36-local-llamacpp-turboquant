@@ -8,9 +8,17 @@ to emulate with supergateway bridges:
 - `--mcp-servers-config`: Cursor-compatible stdio MCP configuration;
 - `--mcp-servers-json`: equivalent inline configuration.
 
-The default uses `--agent`. Built-in tools include file read/search, shell,
-write/edit, datetime, and system info. This is powerful and intentionally
-restricted to localhost.
+The default uses `--agent`. The pinned fork lists eight built-in tools:
+`read_file`, `file_glob_search`, `grep_search`, `exec_shell_command`,
+`write_file`, `edit_file`, `get_datetime`, and `get_info`. The WebUI MCP CORS
+proxy is a browser feature. It is separate from the optional Node context
+compaction proxy on `:11500`.
+
+Agent mode makes these tools available; the model does not call all of them
+on every turn. `GET /tools` shows what the running server currently exposes.
+External stdio MCP tools appear only when `MCP_CONFIG` points to a readable
+configuration. API clients supplying their own `tools` definitions manage
+their own tool-call loop.
 
 To attach external stdio servers directly:
 

@@ -1,4 +1,5 @@
-// HTTP server. Phase 0: pure passthrough with instrumentation.
+// HTTP server for passthrough, shadow, and enforce modes. Passthrough is the
+// checked-in default; rewrite and classifier work is gated by mode/config.
 //
 // Design notes:
 // - We do NOT use the streams web API for the upstream body — Node's
@@ -14,7 +15,7 @@
 //   non-streaming JSON response or the last streaming chunk that contains a
 //   `usage` field (llama-server emits one when stream_options.include_usage).
 //   If we can't see it, completion_tokens is logged as null. That's fine for
-//   Phase 0 instrumentation.
+//   instrumentation.
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -573,6 +574,10 @@ export function createProxyServer({
       cache_dir: config.cache_dir,
       tokenizer_cache: tokenizer.cache.size,
       watermarks: config.watermarks,
+      jev: {
+        enabled: Boolean(config.jev?.local_url),
+        mode: config.jev?.mode ?? "local-first",
+      },
     };
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify(payload, null, 2));

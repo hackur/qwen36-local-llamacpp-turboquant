@@ -1,7 +1,12 @@
 # Offline mode
 
 Use `make start-offline`. It launches the same Qwen3.8 weights, projector,
-native context, KV cache, MTP, reasoning, and metrics with `AGENT=0`.
+native context, KV cache, MTP, reasoning, and metrics with `AGENT=0` and an
+empty `MCP_CONFIG`. Clear both values for a manual foreground launch too:
+
+```bash
+AGENT=0 MCP_CONFIG= make start-foreground
+```
 
 The distinction is deliberate:
 

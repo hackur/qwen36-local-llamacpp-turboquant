@@ -34,7 +34,9 @@ ensure_port_free "$PORT"
 preflight_memory
 mkdir -p "$REPO/logs"
 
-echo "Starting Qwen3.8 mainline baseline on http://127.0.0.1:$PORT"
-echo "  context=$CTX kv=f16/f16 mtp=off vision=on agent=$AGENT"
-echo "  log=$LOG"
-exec "${CMD[@]}" 2>&1 | tee "$LOG"
+log_banner "Starting Qwen3.8 mainline baseline on http://127.0.0.1:$PORT" | tee -a "$LOG"
+{
+  echo "  context=$CTX kv=f16/f16 mtp=off vision=on agent=$AGENT"
+  echo "  log=$LOG"
+} | timestamp_logs | tee -a "$LOG"
+exec "${CMD[@]}" 2>&1 | timestamp_logs | tee -a "$LOG"

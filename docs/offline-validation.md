@@ -2,7 +2,7 @@
 
 1. `make stop`
 2. Disable Wi-Fi and disconnect other interfaces if proving air-gap behavior.
-3. `AGENT=0 make start-foreground`
+3. `AGENT=0 MCP_CONFIG= make start-foreground`
 4. In another terminal, run `make quality`, `make vision`, and
    `make audit-offline`.
 5. Confirm `/health`, `/v1/models`, `/metrics`, text generation, and vision all

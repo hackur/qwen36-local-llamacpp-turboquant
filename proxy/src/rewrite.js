@@ -1,6 +1,8 @@
 // Rewrite pipeline orchestrator. Wires verbatim window + Tier 1 elision into
-// a single async entry point used by the server. Phase 1: Tier 0 + Tier 1 only.
-// Tiers 2-4 will hook in here in later phases.
+// a single async entry point used by the server. Optional JEV routing can
+// tighten Tier 0/Tier 1 thresholds; other compaction stages remain gated.
+// Same-model summaries, notes, and extractive fallback are implemented below
+// and disabled in the checked-in config.
 //
 // Caller contract:
 //   rewriteRequest({ body, tokenizer, config, cacheDir })
@@ -17,6 +19,7 @@ import {
 } from "./tier1.js";
 import { shouldCompact } from "./watermark.js";
 import { summarize, buildToolResultPrompt } from "./summarizer.js";
+import { routeLocalRequest } from "./jev.js";
 import { extractNotesFromToolResult, formatNotes, sumyExtractive } from "./notes.js";
 
 function messageBodyText(m) {
@@ -46,22 +49,26 @@ export async function rewriteRequest({
 }) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   const wm = config.watermarks || {};
+  let jevRoute = null;
+  let jevConfidence = 0;
+  const jevCfg = config.jev || {};
+  if (jevCfg.local_url) {
+    try {
+      const lastUser = [...messages].reverse().find((m) => m?.role === "user");
+      const stateText = typeof lastUser?.content === "string" ? lastUser.content : JSON.stringify(lastUser?.content ?? messages.slice(-3));
+      const jr = await routeLocalRequest(stateText.slice(0, 4000), { localUrl: jevCfg.local_url || undefined, mode: jevCfg.mode || "local-first", timeoutMs: jevCfg.timeout_ms ?? 300 });
+      if (jr) { jevRoute = jr.route; jevConfidence = jr.routeConfidence ?? 0; }
+    } catch { jevRoute = null; }
+  }
+  const jevForced = jevRoute === "compact" && jevConfidence >= 0.6;
   const verbatimOpts = {
-    keepTurns: wm.verbatim_keep_turns ?? 8,
-    keepTokens: wm.verbatim_keep_tokens ?? 8000,
+    keepTurns: jevForced ? Math.min(wm.verbatim_keep_turns ?? 8, 2) : (wm.verbatim_keep_turns ?? 8),
+    keepTokens: jevForced ? Math.min(wm.verbatim_keep_tokens ?? 8000, 2000) : (wm.verbatim_keep_tokens ?? 8000),
   };
-
-  // Pre-tokenize per-message bodies once so verbatim & tier1 can be sync.
   const perMessageText = messages.map(messageBodyText);
-  const perMessageTokens = await Promise.all(
-    perMessageText.map((t) => (t ? tokenizer.countTokens(t) : Promise.resolve(0))),
-  );
+  const perMessageTokens = await Promise.all(perMessageText.map((t) => (t ? tokenizer.countTokens(t) : Promise.resolve(0))));
   const origTokens = perMessageTokens.reduce((a, b) => a + b, 0);
-
-  const { evictableIndices } = pickVerbatim(messages, {
-    ...verbatimOpts,
-    tokenCounts: perMessageTokens,
-  });
+  const { evictableIndices } = pickVerbatim(messages, { ...verbatimOpts, tokenCounts: perMessageTokens });
 
   // For tier1 we need a sync tokenCount over arbitrary body strings — use the
   // tokenizer cache + a fallback ceil(chars/4) when uncached. Pre-warm the
@@ -100,8 +107,8 @@ export async function rewriteRequest({
   };
 
   const toolNameFromCallId = buildToolNameIndex(messages);
-
-  const minTokens = wm.tool_result_min_tokens ?? 2000;
+  let minTokens = wm.tool_result_min_tokens ?? 2000;
+  if (jevForced) minTokens = Math.min(minTokens, 500);
 
   // Phase 2 hook: small-model recursive summarizer (Tier 3).
   //
@@ -319,6 +326,8 @@ export async function rewriteRequest({
       summarized_count: summarizedCount,
       notes_count: notesCount,
       sumy_used: sumyUsed,
+      jev_route: jevRoute,
+      jev_confidence: jevConfidence,
     },
   };
 }

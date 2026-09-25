@@ -1,7 +1,7 @@
 # Qwen3.8 compaction proxy configuration.
 #
-# Phase 0 is passthrough only. Watermark / mode plumbing exists so Phase 1
-# can plug in compaction without a config break.
+# The checked-in mode is passthrough. Shadow and enforce compaction paths are
+# implemented but must be selected explicitly.
 
 # Address the proxy listens on. See docs/compaction-strategy.md.
 listen:
@@ -23,11 +23,11 @@ mode: "passthrough"
 
 # Watermarks. Tier 0 verbatim window + Tier 1 elision read these.
 watermarks:
-  # Fraction of n_ctx that triggers compaction (used by future tiers).
+  # Fraction of the running server's n_ctx that triggers optional stages.
   prompt_fraction: 0.70
   # Single tool result above this many tokens always gets elided (Tier 1).
   tool_result_min_tokens: 2000
-  # Fallback message-count / age trigger (used by future tiers).
+  # Fallback message-count / age trigger for optional stages.
   max_messages: 40
   max_age_turns: 20
   # Tier 0 verbatim window (whichever is larger keeps more).
@@ -93,3 +93,13 @@ hooks:
   enabled: false
   default_timeout_ms: 50
   handlers: []
+
+# Optional Jev compaction decision. rewrite.js calls this only when local_url
+# is set; an empty value leaves the ordinary thresholds unchanged. A configured
+# local endpoint may use the TypeSafe cloud fallback when credentials exist.
+# Set local_url to http://127.0.0.1:8000 for laya-serve.
+# mode: local-first | cloud-first | parallel-race | local-only | cloud-only
+jev:
+  local_url: ""
+  mode: "local-first"
+  timeout_ms: 1500

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-analyze-watermarks.py — Phase 0 telemetry analyzer for compaction watermark tuning.
+analyze-watermarks.py — telemetry analyzer for compaction watermark tuning.
 
 Reads JSONL request logs written by the qwen-compact proxy
 (proxy/src/jsonl-logger.js) under ~/.cache/qwen-compact/logs/*.jsonl,
@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from typing import Iterable
 
 DEFAULT_LOGS = os.path.expanduser("~/.cache/qwen-compact/logs/*.jsonl")
-DEFAULT_N_CTX = 262144  # Qwen3.8 native context; override with --n-ctx
+DEFAULT_N_CTX = 262144  # checked-in default; override for a smaller live CTX
 DEFAULT_SESSION_GAP_MIN = 15  # inactivity gap that ends a session
 WATERMARKS = (0.50, 0.60, 0.70, 0.75, 0.80)
 # A session is considered to have "filled" the window if utilization ever
@@ -202,7 +202,7 @@ def suggest(report: dict) -> tuple[float, str]:
 
 def render_markdown(report: dict, n_ctx: int, suggested: tuple[float, str]) -> str:
     lines = []
-    lines.append("# Watermark analysis (Phase 0 telemetry)")
+    lines.append("# Watermark analysis")
     lines.append("")
     lines.append(f"- Sessions analyzed: **{report['total_sessions']}**")
     lines.append(
@@ -270,7 +270,7 @@ def render_csv(report: dict, n_ctx: int, suggested: tuple[float, str]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        description="Analyze Phase 0 telemetry and recommend a compaction watermark.",
+        description="Analyze proxy telemetry and recommend a compaction watermark.",
     )
     p.add_argument(
         "--logs",

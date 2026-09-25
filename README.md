@@ -1,7 +1,8 @@
 # Qwen3.8 Local TurboQuant
 
-One model, one endpoint, one supported configuration: **Qwen3.8-27B Q8_0**
-on Apple Silicon through the active TurboQuant llama.cpp fork.
+One supported model: **Qwen3.8-27B Q8_0** on Apple Silicon through the pinned
+TurboQuant llama.cpp fork. The model server listens on `:10501`; an optional
+Node compaction proxy can listen on `:11500` when started separately.
 
 The default runtime on `http://127.0.0.1:10501` enables:
 
@@ -10,7 +11,7 @@ The default runtime on `http://127.0.0.1:10501` enables:
 - adaptive, chained embedded-MTP decoding (depth 3–8);
 - the matching BF16 vision projector;
 - Qwen3.8 thinking mode and preserved reasoning history;
-- llama.cpp metrics, native WebUI, MCP proxy, and all built-in agent tools.
+- llama.cpp metrics, native WebUI, WebUI MCP CORS proxy, and all built-in agent tools.
 
 No fallback models, draft sidecars, embedding models, custom chat templates,
 or legacy model aliases are supported. Historical implementations remain in
@@ -40,7 +41,10 @@ cache. See [install-models](docs/install-models.md).
 ## Security profile
 
 `make start` deliberately uses llama.cpp `--agent`, which enables its WebUI MCP
-proxy and built-in read, search, shell, write, edit, time, and info tools. The
+proxy and built-in read, search, shell, write, edit, time, and info tools. These
+are available to agent sessions; a text API request does not invoke every tool.
+External MCP tools appear only when configured. The separate compaction proxy
+is not started by `make start` and defaults to passthrough when started. The
 server binds only to `127.0.0.1` and restricts CORS to localhost, but tool use
 still grants the model local-machine capabilities. Do not expose this port.
 
@@ -55,12 +59,13 @@ overrides are intentionally temporary:
 ```bash
 MTP=0 make start-foreground                 # same model, no speculative decode
 CTX=131072 make start-foreground            # smaller memory footprint
-AGENT=0 make start-foreground               # strict local inference profile
+AGENT=0 MCP_CONFIG= make start-foreground   # strict local inference profile
 MCP_CONFIG=/abs/path/mcp.json make start-foreground
 ```
 
 `make start-baseline` runs the same weights and projector through mainline
 llama.cpp with f16 KV and no MTP. It exists only as a controlled comparison.
+It inherits the `AGENT` default unless overridden.
 
 ## Local validation
 

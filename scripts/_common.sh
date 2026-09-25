@@ -144,3 +144,15 @@ preflight_memory() {
   minimum_bytes=$((model_bytes + projector_bytes + 8 * 1024 * 1024 * 1024))
   (( total_bytes >= minimum_bytes )) || die "insufficient unified memory for Qwen3.8 Q8_0 + projector"
 }
+
+log_stamp() {
+  date +%Y-%m-%d-%H-%M-%S
+}
+
+timestamp_logs() {
+  perl -MPOSIX -ne '$|=1; print strftime("%Y-%m-%d-%H-%M-%S", localtime), " $_"'
+}
+
+log_banner() {
+  echo "=== $(log_stamp) $* ==="
+}

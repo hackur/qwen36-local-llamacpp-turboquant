@@ -32,7 +32,7 @@ start: ## Start the complete Qwen3.8 runtime in the background on :10501
 		echo "Qwen3.8 is already running on :10501"; \
 	else \
 		mkdir -p logs; \
-		./scripts/start-turboquant.sh > logs/qwen38.log 2>&1 & \
+		./scripts/start-turboquant.sh >> logs/qwen38.log 2>&1 & \
 		echo "starting Qwen3.8; log -> logs/qwen38.log"; \
 	fi
 
@@ -40,7 +40,7 @@ start-foreground: ## Start the complete Qwen3.8 runtime in the foreground
 	./scripts/start-turboquant.sh
 
 start-offline: ## Start Qwen3.8 without agent tools or the WebUI MCP proxy
-	AGENT=0 ./scripts/start-turboquant.sh
+	AGENT=0 MCP_CONFIG= ./scripts/start-turboquant.sh
 
 start-baseline: ## Start the same Qwen3.8 model on mainline with f16 KV and no MTP
 	PORT=10500 CTX=32768 ./scripts/start-baseline.sh
@@ -48,7 +48,7 @@ start-baseline: ## Start the same Qwen3.8 model on mainline with f16 KV and no M
 stop: ## Stop llama-server processes launched from this repository
 	./scripts/stop-all.sh
 
-status: ## Show Qwen3.8 full and baseline server status
+status: ## Show model servers, compaction proxy, and classifier gate
 	./scripts/status.sh
 
 info: ## Show the full local runtime dashboard

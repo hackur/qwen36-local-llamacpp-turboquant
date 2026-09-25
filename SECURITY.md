@@ -14,11 +14,13 @@ user account's permissions:
 - never reverse-proxy it to another machine;
 - review tool calls before accepting them in the WebUI;
 - configure external MCP servers only from trusted local files;
-- use `AGENT=0` for untrusted prompts or strict offline operation.
+- use `AGENT=0 MCP_CONFIG=` for untrusted prompts or strict offline operation.
 
 Agent mode can make outbound requests through the MCP proxy when a user or
-tool asks it to. `make start-offline` disables that capability while leaving
-the model, MTP, vision, reasoning, and metrics enabled.
+tool asks it to. `make start-offline` clears `AGENT` and `MCP_CONFIG`,
+disabling built-in tools, the WebUI MCP proxy, and external stdio MCP servers
+while leaving the model, MTP, vision, reasoning, and metrics enabled. The
+separate Node compaction proxy is never started by that target.
 
 ## Model and dependency trust
 

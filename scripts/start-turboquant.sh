@@ -36,9 +36,11 @@ ensure_port_free "$PORT"
 preflight_memory
 mkdir -p "$REPO/logs"
 
-echo "Starting Qwen3.8 full runtime on http://127.0.0.1:$PORT"
-echo "  model=$MODEL_FILE"
-echo "  context=$CTX kv=$KV_K/$KV_V mtp=$MTP_TYPE:$MTP_MIN-$MTP_MAX chain=$MTP_CHAIN"
-echo "  vision=on reasoning-preserve=$REASONING_PRESERVE metrics=$METRICS agent=$AGENT"
-echo "  log=$LOG"
-exec "${CMD[@]}" 2>&1 | tee "$LOG"
+log_banner "Starting Qwen3.8 full runtime on http://127.0.0.1:$PORT" | tee -a "$LOG"
+{
+  echo "  model=$MODEL_FILE"
+  echo "  context=$CTX kv=$KV_K/$KV_V mtp=$MTP_TYPE:$MTP_MIN-$MTP_MAX chain=$MTP_CHAIN"
+  echo "  vision=on reasoning-preserve=$REASONING_PRESERVE metrics=$METRICS agent=$AGENT"
+  echo "  log=$LOG"
+} | timestamp_logs | tee -a "$LOG"
+exec "${CMD[@]}" 2>&1 | timestamp_logs | tee -a "$LOG"

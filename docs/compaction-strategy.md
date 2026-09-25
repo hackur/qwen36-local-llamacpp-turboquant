@@ -1,7 +1,9 @@
 # Qwen3.8 context compaction
 
-The optional proxy on `127.0.0.1:11500` keeps long OpenAI-compatible agent
-sessions within Qwen3.8's 262,144-token native context. It forwards to the
+The optional proxy on `127.0.0.1:11500` can shorten long OpenAI-compatible
+agent sessions before the model's configured context limit. The checked-in
+default is 262,144 tokens, but the running server may use a smaller `CTX`
+override. It forwards to the
 single full runtime on `127.0.0.1:10501`; no legacy model or summarizer sidecar
 is required.
 
@@ -21,7 +23,7 @@ needle tests preserve the facts and decisions that matter.
 
 ## Watermarks
 
-The initial prompt watermark is 70% of the configured 262,144-token context.
+The initial prompt watermark is 70% of the running server's context.
 That number is deliberately a starting point. `scripts/analyze-watermarks.py`
 reconstructs sessions from local JSONL telemetry and compares 50%, 60%, 70%,
 75%, and 80% candidates. See [watermark-tuning.md](watermark-tuning.md).

@@ -11,6 +11,23 @@ The WebUI provides thinking controls, image attachments, built-in agent tools,
 MCP server management, and conversation history. It is the supported browser
 client because it tracks the server's features directly.
 
+`make start` starts only the model server on `:10501`. Its default `AGENT=1`
+enables the WebUI MCP CORS proxy and all eight built-in tools. The model chooses
+tools as needed during agent sessions; enabling them does not run them on every
+request. External MCP tools require `MCP_CONFIG`. Check the active set with:
+
+```bash
+curl -s http://127.0.0.1:10501/tools | jq -r '.[].tool'
+```
+
+The independent context-compaction proxy starts with `make proxy-start` and
+listens on `:11500`. Clients must explicitly use that URL to pass through it.
+Its checked-in mode is `passthrough`; see [proxy](proxy.md) for `shadow` and
+`enforce` and the optional JEV/Laya classifier gate. `make status` shows the
+model and proxy listeners, plus the proxy mode and JEV gate when running.
+`make start-offline` removes llama.cpp agent tools and its WebUI MCP proxy; it
+does not start or stop the Node proxy.
+
 ## OpenAI-compatible text request
 
 ```bash
@@ -46,8 +63,14 @@ historical thought blocks.
 
 ## Editor clients
 
-`configs/continue.json` and `configs/opencode.json` both point only to
-`qwen3.8-local` on `:10501` with 262,144-token context.
+`configs/continue.json` and `configs/opencode.json` both point to
+`qwen3.8-local` on `:10501`. Their 262,144-token setting is a client
+configuration, not proof of the active server context. Check `GET /props`
+after launching with an override such as `CTX=98304`:
+
+```bash
+curl -s http://127.0.0.1:10501/props | jq '.default_generation_settings.n_ctx'
+```
 
 ## Strict offline profile
 

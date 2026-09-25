@@ -42,11 +42,11 @@ Algorithm (`scripts/analyze-watermarks.py`):
   every session — too aggressive. Near 0% means the watermark is dead code.
   Aim for the trigger rate to roughly match the share of sessions that
   actually fill the window (the `Sessions filled` header line).
-- **Avg lead.** Below ~3 messages is too late; the summarizer is a 4B model
-  and a streamed reply costs seconds. Above ~10 typically means you tripped on
-  a wide plateau and most of those messages weren't going to grow anyway.
-- **FPR.** This is the most expensive number to be wrong on: every false
-  positive is a model invocation and a quality dilution for no benefit.
+- **Avg lead.** Below ~3 messages leaves little room for optional same-model
+  summarization. Above ~10 can mean the watermark fired on a wide plateau.
+- **FPR.** A false positive causes unnecessary compaction in `enforce` mode.
+  When same-model summarization is enabled, it can also cause an extra model
+  invocation.
 
 ## Choosing a watermark
 
@@ -59,8 +59,8 @@ suggestion encodes that rule; treat it as a starting point, not an oracle.
 `scripts/synthesize-telemetry.py` fabricates a week of plausibly-shaped
 sessions (mix of short / medium / filling / burst) for testing the analyzer
 itself. **Do not tune watermarks against synthetic data** — the shape mix is
-hand-picked, not measured. Once the proxy has run in shadow mode (`compact:off`
-records still log) for a full week:
+hand-picked, not measured. Once clients have sent representative traffic
+through the proxy in shadow mode for a full week:
 
 1. `make analyze-watermarks` reads from the real path by default.
 2. Real data should show a heavier tail than the synthetic mix (long
@@ -73,8 +73,8 @@ records still log) for a full week:
 
 ```sh
 python3 scripts/synthesize-telemetry.py --out /tmp/syn.jsonl
-make analyze-watermarks ARGS="--logs /tmp/syn.jsonl"
-make analyze-watermarks ARGS="--logs /tmp/syn.jsonl --csv"
+python3 scripts/analyze-watermarks.py --logs /tmp/syn.jsonl
+python3 scripts/analyze-watermarks.py --logs /tmp/syn.jsonl --csv
 ```
 
 Synthetic output **must not** be written under `~/.cache/qwen-compact/logs/`;

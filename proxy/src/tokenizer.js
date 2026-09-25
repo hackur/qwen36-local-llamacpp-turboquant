@@ -1,6 +1,7 @@
 // Tokenizer client. Calls upstream /tokenize (llama-server) and caches by exact
 // string. Token counts here MUST come from the same tokenizer the primary model
-// uses, so we never use tiktoken or a JS fallback.
+// uses. The rewrite path has a chars/4 fallback only if a candidate string
+// was not cached after tokenization.
 import { LRU } from "./lru.js";
 
 export class TokenizerClient {
@@ -30,9 +31,9 @@ export class TokenizerClient {
     return n;
   }
 
-  // Approximate count over an OpenAI-style messages array. Phase 0 instrumentation
-  // only — does not include chat-template overhead. Phase 1 will switch to a
-  // /tokenize call against the rendered template once we wire that in.
+  // Approximate count over an OpenAI-style messages array. This does not
+  // include chat-template overhead. Rewrite stages also count message bodies
+  // individually through /tokenize.
   async countMessages(messages) {
     if (!Array.isArray(messages)) return 0;
     let total = 0;

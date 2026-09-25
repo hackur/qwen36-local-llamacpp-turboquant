@@ -28,6 +28,14 @@ Confirm `AGENT=1` and check `/tools`. The server must advertise `--agent`; the
 launcher refuses older builds. External MCP servers additionally require a
 readable `MCP_CONFIG` file.
 
+## Proxy or JEV classifier appears inactive
+
+Run `make status`. The compaction proxy is a separate process and needs
+`make proxy-start`; clients must send requests to `:11500`. Its default mode
+is `passthrough`. JEV classification also requires `jev.local_url` to point
+to a running Laya-compatible service. `GET /proxy/info` reports `mode` and
+`jev.enabled`. The demo script starts only fake classifier servers.
+
 ## Strict offline audit fails
 
 Stop the server and launch `make start-offline`. Full agent mode intentionally

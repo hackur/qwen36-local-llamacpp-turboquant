@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Proxy and operator guidance
+
+- Documented the separate llama.cpp WebUI MCP proxy and optional Node
+  compaction proxy, including direct client routing and default passthrough.
+- Added the optional JEV/Laya classifier integration and standalone research
+  script. The classifier gate stays disabled until `jev.local_url` is set;
+  Laya is not launched by this project.
+- Exposed proxy mode and classifier-gate state through `make status` and
+  `/proxy/info`; clarified current versus configured context.
+- Cleared inherited external MCP configuration in `make start-offline`.
+- Updated the Node proxy's `js-yaml` dependency to 5.4.2.
+
 ### Qwen3.8-only runtime
 
 - Removed every legacy model alias, sidecar, symlink, launcher, template, and
@@ -19,7 +31,7 @@
 - Removed the external supergateway bridges and small summarizer sidecar. The
   current server has native tools/direct MCP support; the proxy can summarize
   through the same Qwen3.8 upstream.
-- Removed the orphan root npm lock and moved Node guidance to current LTS.
+- Removed the orphan root npm lock; the proxy still supports Node 20+.
 - Kept all testing local; no hosted CI workflow is present or planned.
 - Refreshed the locally built engine pins to llama.cpp `95b8e33e16` and
   TurboQuant `cfd7bde3f` after full-feature runtime checks and a prior-pin

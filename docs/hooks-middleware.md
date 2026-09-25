@@ -1,5 +1,9 @@
 # Proxy Hook/Middleware System — Design Specification
 
+This document includes the original design and historical evaluation notes.
+For current runtime defaults and the optional JEV classifier, see
+[`proxy.md`](proxy.md) and [`../proxy/config.yaml`](../proxy/config.yaml).
+
 **Status:** Implemented v0.2; tests under `proxy/tests/hooks.test.js` are the
 executable contract.
 **Audience:** anyone implementing or extending the proxy at `proxy/`.

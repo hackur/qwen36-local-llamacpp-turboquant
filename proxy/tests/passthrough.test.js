@@ -157,6 +157,7 @@ test("passthrough end-to-end", async (t) => {
     const body = await r.json();
     assert.equal(body.mode, "passthrough");
     assert.equal(body.n_ctx, 131072);
+    assert.equal(body.jev.enabled, false);
   }
 
   // 4. non-streaming chat completion

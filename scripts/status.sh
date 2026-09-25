@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Show the two deliberate Qwen3.8 runtime modes: full TurboQuant and baseline.
+# Show the model servers, optional compaction proxy, and classifier gate.
 set -uo pipefail
 
 probe() {
@@ -17,3 +17,13 @@ probe() {
 
 probe 10501 "Qwen3.8 full runtime"
 probe 10500 "Qwen3.8 baseline"
+
+printf '%-28s :%-5s ' "Compaction proxy" "11500"
+if proxy_info="$(curl -sf --max-time 1 http://127.0.0.1:11500/proxy/info 2>/dev/null)"; then
+  proxy_pid="$(lsof -nP -iTCP:11500 -sTCP:LISTEN -t 2>/dev/null | head -1)"
+  proxy_mode="$(jq -r '.mode // "?"' <<< "$proxy_info")"
+  jev_enabled="$(jq -r '.jev.enabled // false' <<< "$proxy_info")"
+  echo "up pid=$proxy_pid mode=$proxy_mode jev=$jev_enabled"
+else
+  echo "down"
+fi

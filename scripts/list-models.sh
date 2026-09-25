@@ -19,5 +19,5 @@ show_artifact() {
 echo "Qwen3.8-27B Q8_0 (only supported model)"
 show_artifact "weights" "$MODEL_FILE"
 show_artifact "projector" "$MMPROJ_FILE"
-echo "context      $CTX native tokens"
-echo "runtime      q8_0/turbo3 KV + adaptive chained MTP + vision + agent tools"
+echo "configured   $CTX context tokens (check /props for the running server)"
+echo "default      q8_0/turbo3 KV + adaptive chained MTP + vision + agent tools"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Quarterly offline re-validation. LM Studio updates can move model paths and
-# reintroduce online dependencies; this script catches both.
+# Quarterly local socket, model-link, and privacy re-validation. This checks
+# current sockets; it does not prove that agent or MCP features are disabled.
 #
 # Checks:
 #   1. `make audit-offline` against the live :10501 turboquant server (and the
@@ -9,7 +9,7 @@
 #      Studio path changes after a major version update).
 #   3. `scripts/privacy-scan.sh` over the whole repo.
 #
-# Output: a timestamped report at logs/quarterly-audit-YYYY-MM-DD.log.
+# Output: a timestamped report at logs/quarterly-audit-YYYY-MM-DD-HH-MM-SS.log.
 # Exit code: non-zero on any failure (broken symlink, non-localhost socket,
 # privacy-scan hit, or server audit failure).
 #
@@ -25,7 +25,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
 
 mkdir -p "$REPO/logs"
-STAMP="$(date +%Y-%m-%d)"
+STAMP="$(date +%Y-%m-%d-%H-%M-%S)"
 LOG="$REPO/logs/quarterly-audit-$STAMP.log"
 : > "$LOG"
 

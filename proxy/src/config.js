@@ -69,6 +69,11 @@ const DEFAULTS = {
     enabled: false,
     target_sentences: 5,
   },
+  jev: {
+    local_url: "",
+    mode: "local-first",
+    timeout_ms: 1500,
+  },
   // Phase 6 — hook engine + middleware (docs/hooks-middleware.md v0.2). Off by
   // default. When `enabled: false` or `handlers: []`, byte-identical to today.
   hooks: {
@@ -140,7 +145,8 @@ export function loadConfig(configPath) {
       `invalid summarizer.mode '${cfg.summarizer.mode}'; must be one of ${[...VALID_SUMMARIZER_MODES].join(", ")}`,
     );
   }
-  // Phase 1: passthrough | shadow | enforce all wired. Tier 0 + Tier 1 only.
+  // Passthrough, shadow, and enforce are wired. Optional stages are gated by
+  // their own config and only affect forwarded messages in enforce mode.
 
   cfg.cache_dir = expandHome(cfg.cache_dir);
   cfg.config_path = path;

@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+### Local Laya classifier service
+
+- Added `scripts/laya.sh`, `scripts/laya-server.py`, and
+  `scripts/laya-download.py`: a pinned local Laya typed-decisions
+  classifier served on `127.0.0.1:18000` through a `com.local.qwen.laya`
+  login agent. The checkpoint (`convaiinnovations/laya-typed-decisions`
+  @ `e929ae5c`) is hash-verified at download time, served offline with
+  `HF_HUB_OFFLINE=1`, and unpinned/`jev-latest` requests are pinned to the
+  installed checkpoint.
+- The proxy's JEV gate now points at the local service: `jev.local_url` is
+  `http://127.0.0.1:18000`, `jev.model` is `typed-decisions`, and the mode
+  is `local-only` so a dead classifier is a hard local miss rather than a
+  TypeSafe cloud fallback. Requests carry the model pin in the
+  `/v1/systemone` body, and `/proxy/info` plus the per-request rewrite
+  telemetry expose `jev.model`, `jev.local_url`, `jev_route`, and
+  `jev_confidence`.
+- The checked-in proxy mode is now `shadow`: the classifier and candidate
+  rewrite are evaluated and logged while the ORIGINAL request is forwarded
+  upstream. `enforce` remains opt-in behind the replay + needle quality
+  gates in `docs/compaction-strategy.md`.
+- New Makefile targets: `laya-install`, `laya-download`, `laya-start`,
+  `laya-stop`, `laya-status`, `laya-smoke`; `make status` reports the
+  `:18000` listener. Setup and acceptance evidence are in `docs/laya.md`.
+
+### Service and stop controls
+
+- Added `scripts/service.sh` and Makefile targets `service-status`,
+  `service-register`, `service-start`, `service-stop`, `service-restart`,
+  and `service-unregister` for the `com.local.qwen3-8.turboquant` login
+  agent. Registration preserves an existing installed plist; stop unloads
+  the job but retains it. `install-launchd`/`uninstall-launchd` remain as
+  aliases.
+- `make stop` now stops the compaction proxy, the launchd agent, and the
+  repo's model servers. Added `make proxy-stop` (port-anchored stop of the
+  `:11500` proxy) and a `--processes-only` escape hatch on
+  `scripts/stop-all.sh`. The model-server scan now uses `ps -axww` plus an
+  anchored vendor-path match because `pgrep -f` cannot see the llama-server
+  700+ character command line.
+- `make info` distinguishes a registered-but-stopped agent from an
+  unregistered one.
+
 ### Proxy and operator guidance
 
 - Documented the separate llama.cpp WebUI MCP proxy and optional Node

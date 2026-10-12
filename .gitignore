@@ -24,6 +24,10 @@ __pycache__/
 .ssh/
 secrets/
 proxy/eval/ab-harness/out/
+
+# Personal config/conversation exports — never commit
+configs/*_conversations.zip
+configs/llama_settings_*.json
 benchmarks/sweep-*.md
 benchmarks/sparse-v-ablation-*.md
 benchmarks/np-concurrency-*.md

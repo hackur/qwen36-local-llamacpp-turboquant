@@ -20,6 +20,15 @@ case "${1:-status}" in
     ;;
   start)
     [[ -x "$PYTHON" ]] || { echo "run make laya-install first" >&2; exit 1; }
+    # The server runs with HF_HUB_OFFLINE=1, so a missing checkpoint cache
+    # would surface as a cryptic huggingface_hub error from the LaunchAgent.
+    # Fail fast here with the actionable command instead. The verify script
+    # prints a clean message itself when the cache is incomplete.
+    if ! "$PYTHON" "$REPO/scripts/laya-download.py" --verify-only >/dev/null 2>&1; then
+      echo "pinned Laya checkpoint missing from the local cache" >&2
+      echo "run 'make laya-download' (or 'make laya-install') first" >&2
+      exit 1
+    fi
     if launchctl print "$TARGET" >/dev/null 2>&1; then
       launchctl kickstart "$TARGET"
     else

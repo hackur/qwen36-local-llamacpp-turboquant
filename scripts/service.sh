@@ -12,6 +12,45 @@ DOMAIN="gui/$(id -u)"
 
 loaded() { launchctl print "$TARGET" >/dev/null 2>&1; }
 port_pid() { lsof -nP -iTCP:10501 -sTCP:LISTEN -t 2>/dev/null || true; }
+
+# Healthcheck used by install: after loading, the KeepAlive job must bring up
+# a listener on 10501 within the bounded wait. The 27B Q8_0 load on MTL0 takes
+# roughly 20-40 s, so allow 180 s before declaring failure.
+wait_for_listener() {
+  local deadline=$(( $(date +%s) + 180 )) pid
+  while (( $(date +%s) < deadline )); do
+    if pid="$(port_pid)" && [[ -n "$pid" ]]; then
+      echo "listener: port 10501 up (pid $pid)"
+      return 0
+    fi
+    sleep 3
+  done
+  echo "ERROR: no listener on 10501 after 180 s" >&2
+  echo "  check logs/launchd.err and logs/qwen38.log" >&2
+  return 1
+}
+
+# End-to-end bootstrap verification for a fresh checkout. Every step must
+# pass or install fails with an actionable message; nothing is left half-set.
+run_install_check() {
+  local launcher="$REPO/scripts/start-turboquant.sh"
+  if [[ ! -x "$REPO/vendor/llama-cpp-turboquant/build/bin/llama-server" ]]; then
+    echo "ERROR: vendor/llama-cpp-turboquant/build/bin/llama-server not found" >&2
+    echo "  run 'make build' first (or set TURBOQUANT_BIN)" >&2
+    return 1
+  fi
+  if [[ ! -x "$launcher" ]]; then
+    echo "ERROR: launcher not executable: $launcher" >&2
+    return 1
+  fi
+  if [[ ! -f "$REPO/configs/launchd-plist.template" ]]; then
+    echo "ERROR: configs/launchd-plist.template missing" >&2
+    return 1
+  fi
+  "$0" register
+  wait_for_listener
+}
+
 ensure_port_available() {
   local pid
   pid="$(port_pid)"
@@ -33,7 +72,10 @@ case "${1:-}" in
       echo "port 10501: no listener"
     fi
     ;;
-  register|install)
+  install)
+    run_install_check
+    ;;
+  register)
     if [[ ! -f "$PLIST" ]]; then
       mkdir -p "$(dirname "$PLIST")" "$REPO/logs"
       # Escape sed replacement metacharacters in the checkout path.
@@ -75,7 +117,7 @@ case "${1:-}" in
     echo "unregistered: $TARGET"
     ;;
   *)
-    echo "usage: $0 {status|register|start|stop|restart|unregister}" >&2
+    echo "usage: $0 {status|register|install|start|stop|restart|unregister}" >&2
     exit 2
     ;;
 esac

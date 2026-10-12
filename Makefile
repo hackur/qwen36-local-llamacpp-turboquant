@@ -7,8 +7,9 @@ SHELL := bash
 	bench-venv \
 	needle quality eval vision demo open proxy-install proxy-test proxy-start proxy-stop \
 	proxy-smoke analyze-watermarks privacy-scan prepush quarterly-audit \
-	audit-offline install-launchd uninstall-launchd service-status service-register \
-	service-start service-stop service-restart service-unregister clean
+	audit-offline install-launchd uninstall-launchd service-install service-status \
+	service-register service-start service-stop service-restart service-unregister \
+	laya-verify clean
 
 help:
 	@awk 'BEGIN{FS=":.*##"; printf "Targets:\n"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -122,6 +123,9 @@ quarterly-audit: ## Revalidate model links, engine pins, and offline behavior
 audit-offline: ## Report non-loopback sockets held by the running server
 	./scripts/info.sh --audit-offline
 
+service-install: ## Verify build, register, load, and confirm the :10501 listener
+	./scripts/service.sh install
+
 service-status: ## Show launchd registration, job, and model listener
 	./scripts/service.sh status
 
@@ -153,6 +157,9 @@ laya-install: ## Install pinned Laya runtime and download/verify its checkpoint
 
 laya-download: ## Download and SHA-256 verify the pinned Laya checkpoint
 	./scripts/laya.sh download
+
+laya-verify: ## Re-verify the cached Laya checkpoint (offline)
+	./vendor/laya-venv/bin/python scripts/laya-download.py --verify-only
 
 laya-start: ## Start the persistent local Laya classifier on :18000
 	./scripts/laya.sh start

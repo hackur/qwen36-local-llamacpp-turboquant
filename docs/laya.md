@@ -14,7 +14,26 @@ make laya-start      # launchd service, restarts on failure and at login
 make laya-status    # actual service / resident-checkpoint health
 make laya-smoke     # real choice, score, noul and proxy-client inference
 make laya-stop      # unload service; keep its login plist
+make laya-verify    # re-verify the cached checkpoint (fully offline)
 ```
+
+`make laya-start` refuses to start when the pinned checkpoint is missing
+from the local cache, because the service runs with `HF_HUB_OFFLINE=1`:
+a cold start would otherwise fail inside the LaunchAgent with a
+huggingface_hub traceback instead of an actionable message. Run
+`make laya-download` (or `make laya-install`) first, then
+`make laya-start`.
+
+## Offline notes
+
+No internet is required once `make laya-install` has completed once:
+the checkpoint lives in the huggingface_hub cache and the service is
+pinned to it with `local_files_only`. Re-verify any time with
+`make laya-verify` (no network, re-hashes the cached weights). If the
+machine is rebuilt or the cache is cleared, `make laya-download` is the
+only step that needs the network. `proxy/node_modules` likewise must be
+installed with `npm ci` while the registry is reachable; the checked-in
+`package-lock.json` pins pino 10.4.0, js-yaml 5.4.2, and friends.
 
 Logs are in `logs/laya.log`. `scripts/laya.sh foreground` runs interactively.
 The service binds only to loopback and makes no cloud classifier calls.

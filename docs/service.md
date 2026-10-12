@@ -9,6 +9,7 @@ proxy on `:11500` is independent.
 
 | Command | Effect |
 | --- | --- |
+| `make service-install` | First-run bootstrap: verify the vendored `llama-server` build, launcher, and plist template exist, then register, load, and wait (up to 180 s) until the `:10501` listener answers. Fails with an actionable message at the first broken step. |
 | `make service-status` | Show plist registration, launchd load state, and the `:10501` listener. |
 | `make service-register` | Create the plist if missing and load it. Starts the model. |
 | `make service-stop` or `make stop` | Unload the job and stop this repository's model processes. Keep the plist, so you can start it later. |

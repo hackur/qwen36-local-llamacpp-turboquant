@@ -5,7 +5,7 @@ SHELL := bash
 .PHONY: help build upgrade model-link preflight check start start-foreground \
 	start-offline start-baseline stop status info bench bench-suite bench-tui \
 	bench-venv \
-	needle quality eval vision demo open proxy-install proxy-test proxy-start \
+	needle quality eval vision demo open proxy-install proxy-test proxy-start proxy-stop \
 	proxy-smoke analyze-watermarks privacy-scan prepush quarterly-audit \
 	audit-offline install-launchd uninstall-launchd service-status service-register \
 	service-start service-stop service-restart service-unregister clean
@@ -100,6 +100,9 @@ proxy-test: ## Run all compaction proxy tests
 
 proxy-start: ## Start the compaction proxy on :11500
 	cd proxy && npm start
+
+proxy-stop: ## Stop the compaction proxy started from this repository
+	./scripts/stop-proxy.sh
 
 proxy-smoke: ## Run proxy integration checks against the live Qwen3.8 runtime
 	./proxy/tests/integration.sh

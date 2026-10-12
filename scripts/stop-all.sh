@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Stop the launchd agent and any llama-server processes started from this repo.
+# Stop the launchd agent, any llama-server processes, and the compaction proxy
+# started from this repo.
 #
 # Two-phase, race-tolerant:
 #   1. SIGTERM every match, wait briefly, SIGKILL anything still alive.
@@ -13,22 +14,22 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [[ "${1:-}" != "--processes-only" ]]; then
   [[ $# -eq 0 ]] || { echo "usage: $0 [--processes-only]" >&2; exit 2; }
+  "$REPO/scripts/stop-proxy.sh"
   if [[ "$(uname -s)" == Darwin ]]; then
     "$REPO/scripts/service.sh" stop
     exit
   fi
 fi
 
-PATTERNS=(
-  "$REPO/vendor/llama.cpp-mainline/build/bin/llama-server"
-  "$REPO/vendor/llama-cpp-turboquant/build/bin/llama-server"
-)
-
 list_pids() {
-  local pat
-  for pat in "${PATTERNS[@]}"; do
-    pgrep -f "$pat" 2>/dev/null || true
-  done | sort -u
+  # NOTE: pgrep -f cannot see the llama-server on this system (its 700+ char
+  # command line exceeds what pgrep scans), so match with ps instead. ps -ww
+  # prints the full command line, so the anchored vendor-path patterns keep
+  # working and cannot hit unrelated llama-server processes.
+  /bin/ps -axww -o pid=,command= | awk -v repo="$REPO" '
+    index($0, repo "/vendor/llama.cpp-mainline/build/bin/llama-server")     { print $1 }
+    index($0, repo "/vendor/llama-cpp-turboquant/build/bin/llama-server")    { print $1 }
+  ' | sort -u
 }
 
 found_any=0
@@ -57,7 +58,7 @@ for ((pass=1; pass<=max_passes; pass++)); do
 done
 
 if [[ $found_any -eq 0 ]]; then
-  echo "(no llama-server processes from this repo were running)"
+  echo "(no model server or proxy processes from this repo were running)"
   exit 0
 fi
 
@@ -65,11 +66,11 @@ fi
 remaining=()
 while read -r pid; do [[ -n "$pid" ]] && remaining+=("$pid"); done < <(list_pids)
 if (( ${#remaining[@]} > 0 )); then
-  echo "❌ Survivors after $max_passes passes — investigate manually:" >&2
+  echo "❌ Survivors after $max_passes passes (model servers and proxy) — investigate manually:" >&2
   for pid in "${remaining[@]}"; do
     ps -p "$pid" -o pid=,ppid=,command= 2>/dev/null >&2 || true
   done
   exit 1
 fi
 
-echo "✓ stopped"
+echo "✓ stopped llama-server processes and compaction proxy"

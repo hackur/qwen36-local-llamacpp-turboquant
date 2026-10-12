@@ -511,6 +511,8 @@ export function createProxyServer({
             orig_tokens: rewrite.stats.orig_tokens,
             rewritten_tokens: rewrite.stats.rewritten_tokens,
             elided_ids: rewrite.stats.elided_tool_result_ids,
+            jev_route: rewrite.stats.jev_route,
+            jev_confidence: rewrite.stats.jev_confidence,
           }
         : null,
       phantom_answered: phantomAnswered,
@@ -577,6 +579,8 @@ export function createProxyServer({
       jev: {
         enabled: Boolean(config.jev?.local_url),
         mode: config.jev?.mode ?? "local-first",
+        model: config.jev?.model ?? null,
+        local_url: config.jev?.local_url ?? "",
       },
     };
     res.writeHead(200, { "content-type": "application/json" });

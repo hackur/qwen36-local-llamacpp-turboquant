@@ -56,7 +56,7 @@ export async function rewriteRequest({
     try {
       const lastUser = [...messages].reverse().find((m) => m?.role === "user");
       const stateText = typeof lastUser?.content === "string" ? lastUser.content : JSON.stringify(lastUser?.content ?? messages.slice(-3));
-      const jr = await routeLocalRequest(stateText.slice(0, 4000), { localUrl: jevCfg.local_url || undefined, mode: jevCfg.mode || "local-first", timeoutMs: jevCfg.timeout_ms ?? 300 });
+      const jr = await routeLocalRequest(stateText.slice(0, 4000), { localUrl: jevCfg.local_url || undefined, model: jevCfg.model, mode: jevCfg.mode || "local-first", timeoutMs: jevCfg.timeout_ms ?? 300 });
       if (jr) { jevRoute = jr.route; jevConfidence = jr.routeConfidence ?? 0; }
     } catch { jevRoute = null; }
   }

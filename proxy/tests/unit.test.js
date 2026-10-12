@@ -26,7 +26,10 @@ test("LRU promotes on get", () => {
 
 test("config defaults load with no override", () => {
   const cfg = loadConfig();
-  assert.equal(cfg.mode, "passthrough");
+  assert.equal(cfg.mode, "shadow");
+  assert.equal(cfg.jev.local_url, "http://127.0.0.1:18000");
+  assert.equal(cfg.jev.model, "typed-decisions");
+  assert.equal(cfg.jev.mode, "local-only");
   assert.equal(cfg.listen.port, 11500);
   assert.equal(cfg.upstream.base_url, "http://127.0.0.1:10501");
   assert.ok(cfg.cache_dir && !cfg.cache_dir.startsWith("~"));

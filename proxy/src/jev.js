@@ -32,7 +32,7 @@ async function postLocal(baseUrl, state, questions, opts, timeoutMs) {
     const headers = { "content-type": "application/json" };
     const key = process.env.LAYA_API_KEY;
     if (key) headers.authorization = `Bearer ${key}`;
-    const res = await fetch(url, { method: "POST", headers, body: JSON.stringify({ state, questions }), signal: controller.signal });
+    const res = await fetch(url, { method: "POST", headers, body: JSON.stringify({ state, questions, ...(opts.model ? { model: opts.model } : {}) }), signal: controller.signal });
     if (!res.ok) return null;
     const json = await res.json();
     if (!json || typeof json !== "object" || !json.answers) return null;

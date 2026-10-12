@@ -1,7 +1,6 @@
 # Qwen3.8 compaction proxy configuration.
 #
-# The checked-in mode is passthrough. Shadow and enforce compaction paths are
-# implemented but must be selected explicitly.
+# Shadow computes and logs the Laya-assisted rewrite and forwards the original.
 
 # Address the proxy listens on. See docs/compaction-strategy.md.
 listen:
@@ -19,7 +18,7 @@ upstream:
 #   shadow      — compute the rewrite, log it, forward the ORIGINAL upstream.
 #   enforce     — compute the rewrite, forward the REWRITTEN body upstream.
 # `x-compact: off` request header bypasses everything in any mode.
-mode: "passthrough"
+mode: "shadow"
 
 # Watermarks. Tier 0 verbatim window + Tier 1 elision read these.
 watermarks:
@@ -97,9 +96,10 @@ hooks:
 # Optional Jev compaction decision. rewrite.js calls this only when local_url
 # is set; an empty value leaves the ordinary thresholds unchanged. A configured
 # local endpoint may use the TypeSafe cloud fallback when credentials exist.
-# Set local_url to http://127.0.0.1:8000 for laya-serve.
+# Start the local classifier with make laya-start.
 # mode: local-first | cloud-first | parallel-race | local-only | cloud-only
 jev:
-  local_url: ""
-  mode: "local-first"
+  local_url: "http://127.0.0.1:18000"
+  model: "typed-decisions"
+  mode: "local-only"
   timeout_ms: 1500

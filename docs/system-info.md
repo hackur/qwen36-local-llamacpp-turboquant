@@ -22,6 +22,14 @@ was no listener on the optional Node proxy port `:11500`. These are observations
 of the running session, not changes to the checked-in `CTX=262144` default.
 No Laya-compatible classifier listener was found on the example `:8000` port.
 
+## Laya observed 2026-10-03
+
+The pinned typed-decisions checkpoint is downloaded, hash-verified, and served
+on `127.0.0.1:18000` by a persistent login service. Port `8000` is occupied by
+Docker. The Node proxy on `:11500` uses local-only Laya classification in shadow
+mode, and Qwen is healthy on `:10501` with `n_ctx=98304`. Real classifier and
+Qwen round-trip acceptance passed; see [Laya setup and evidence](laya.md).
+
 ## Re-capture
 
 ```sh

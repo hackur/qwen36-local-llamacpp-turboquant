@@ -17,7 +17,7 @@ is required.
 5. Optionally ask the direct Qwen3.8 upstream to summarize prose before the
    main request is forwarded.
 
-The proxy defaults to `passthrough`. Use `shadow` to measure a candidate rewrite
+The proxy defaults to `shadow` to measure a candidate rewrite
 without changing the upstream request. Use `enforce` only after replay and
 needle tests preserve the facts and decisions that matter.
 

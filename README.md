@@ -28,6 +28,12 @@ make start            # background full runtime
 make open             # native llama.cpp WebUI
 ```
 
+If the model is managed by the macOS login agent, use `make service-status`,
+`make service-stop`, and `make service-start`. The agent has `KeepAlive=true`,
+so killing `llama-server` alone causes a restart. `make stop` also stops the
+agent and leaves its registration in place. See [service controls](docs/service.md)
+for registration, restart, and removal.
+
 Finder users can double-click `Qwen3.8.command`.
 
 The expected local artifacts are:
@@ -44,7 +50,8 @@ cache. See [install-models](docs/install-models.md).
 proxy and built-in read, search, shell, write, edit, time, and info tools. These
 are available to agent sessions; a text API request does not invoke every tool.
 External MCP tools appear only when configured. The separate compaction proxy
-is not started by `make start` and defaults to passthrough when started. The
+is not started by `make start` and uses shadow mode with local Laya classification.
+Run `make laya-start` for the classifier; see [Laya setup](docs/laya.md). The
 server binds only to `127.0.0.1` and restricts CORS to localhost, but tool use
 still grants the model local-machine capabilities. Do not expose this port.
 
@@ -87,6 +94,7 @@ the meaningful tests require this Mac, these GGUFs, Metal, and a cool chassis.
 
 - [Architecture and feature flags](docs/architecture.md)
 - [Usage and API examples](docs/usage.md)
+- [macOS service controls](docs/service.md)
 - [Vision](docs/multimodal.md)
 - [MTP](docs/speculative-decoding.md)
 - [Agent tools and MCP](docs/mcp-integration.md)

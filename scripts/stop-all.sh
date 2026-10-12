@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop any llama-server processes started from this repo.
+# Stop the launchd agent and any llama-server processes started from this repo.
 #
 # Two-phase, race-tolerant:
 #   1. SIGTERM every match, wait briefly, SIGKILL anything still alive.
@@ -11,9 +11,17 @@
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+if [[ "${1:-}" != "--processes-only" ]]; then
+  [[ $# -eq 0 ]] || { echo "usage: $0 [--processes-only]" >&2; exit 2; }
+  if [[ "$(uname -s)" == Darwin ]]; then
+    "$REPO/scripts/service.sh" stop
+    exit
+  fi
+fi
+
 PATTERNS=(
-  "vendor/llama.cpp-mainline.*llama-server"
-  "vendor/llama-cpp-turboquant.*llama-server"
+  "$REPO/vendor/llama.cpp-mainline/build/bin/llama-server"
+  "$REPO/vendor/llama-cpp-turboquant/build/bin/llama-server"
 )
 
 list_pids() {

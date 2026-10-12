@@ -18,15 +18,4 @@
 </dict>
 </plist>
 
-<!--
-Placeholders:
-  __REPO__   absolute path to this repository checkout
-
-Install:
-  sed "s|__REPO__|$(pwd)|g" configs/launchd-plist.template > ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
-  launchctl load ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
-
-Uninstall:
-  launchctl unload ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
-  rm ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
--->
+<!-- __REPO__ is replaced by scripts/service.sh register. See docs/service.md. -->

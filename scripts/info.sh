@@ -251,7 +251,11 @@ draw() {
       kv "$ld_label" "${C_GRN}running pid=$ld_pid${C_R}"
     fi
   else
-    kvm "agent" "not installed (run 'make install-launchd' to enable auto-start)"
+    if [[ -f "$HOME/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist" ]]; then
+      kvm "agent" "registered but stopped (run 'make service-start')"
+    else
+      kvm "agent" "unregistered (run 'make service-register' to enable auto-start)"
+    fi
   fi
 
   # ── LAST BENCH ─────────────────────────────────────────────────────────

@@ -7,7 +7,8 @@ SHELL := bash
 	bench-venv \
 	needle quality eval vision demo open proxy-install proxy-test proxy-start \
 	proxy-smoke analyze-watermarks privacy-scan prepush quarterly-audit \
-	audit-offline install-launchd uninstall-launchd clean
+	audit-offline install-launchd uninstall-launchd service-status service-register \
+	service-start service-stop service-restart service-unregister clean
 
 help:
 	@awk 'BEGIN{FS=":.*##"; printf "Targets:\n"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -45,7 +46,7 @@ start-offline: ## Start Qwen3.8 without agent tools or the WebUI MCP proxy
 start-baseline: ## Start the same Qwen3.8 model on mainline with f16 KV and no MTP
 	PORT=10500 CTX=32768 ./scripts/start-baseline.sh
 
-stop: ## Stop llama-server processes launched from this repository
+stop: ## Stop the launchd job and repository llama-server processes
 	./scripts/stop-all.sh
 
 status: ## Show model servers, compaction proxy, and classifier gate
@@ -118,15 +119,46 @@ quarterly-audit: ## Revalidate model links, engine pins, and offline behavior
 audit-offline: ## Report non-loopback sockets held by the running server
 	./scripts/info.sh --audit-offline
 
-install-launchd: ## Install the Qwen3.8 full runtime as a login agent
-	@mkdir -p "$$HOME/Library/LaunchAgents"
-	sed "s|__REPO__|$(CURDIR)|g" configs/launchd-plist.template > "$$HOME/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist"
-	launchctl unload "$$HOME/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist" 2>/dev/null || true
-	launchctl load "$$HOME/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist"
+service-status: ## Show launchd registration, job, and model listener
+	./scripts/service.sh status
 
-uninstall-launchd: ## Remove the Qwen3.8 login agent
-	launchctl unload "$$HOME/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist" 2>/dev/null || true
-	trash "$$HOME/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist" 2>/dev/null || true
+service-register: ## Register and load the Qwen3.8 login agent
+	./scripts/service.sh register
+
+service-start: ## Start the registered Qwen3.8 login agent
+	./scripts/service.sh start
+
+service-stop: ## Stop the agent and model; retain its plist
+	./scripts/service.sh stop
+
+service-restart: ## Restart the registered login agent
+	./scripts/service.sh restart
+
+service-unregister: ## Stop the agent and remove its plist
+	./scripts/service.sh unregister
+
+install-launchd: service-register ## Alias for service-register
+
+uninstall-launchd: service-unregister ## Alias for service-unregister
 
 clean: ## Move generated engine builds to the Trash
 	trash vendor/llama.cpp-mainline/build vendor/llama-cpp-turboquant/build
+
+.PHONY: laya-install laya-download laya-start laya-stop laya-status laya-smoke
+laya-install: ## Install pinned Laya runtime and download/verify its checkpoint
+	./scripts/laya.sh install
+
+laya-download: ## Download and SHA-256 verify the pinned Laya checkpoint
+	./scripts/laya.sh download
+
+laya-start: ## Start the persistent local Laya classifier on :18000
+	./scripts/laya.sh start
+
+laya-stop: ## Stop Laya while retaining its login service registration
+	./scripts/laya.sh stop
+
+laya-status: ## Query actual Laya checkpoint and device health
+	./scripts/laya.sh status
+
+laya-smoke: ## Test real typed decisions and the proxy classifier client
+	node proxy/scripts/laya-smoke.js

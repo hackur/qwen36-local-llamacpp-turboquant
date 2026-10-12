@@ -27,3 +27,10 @@ if proxy_info="$(curl -sf --max-time 1 http://127.0.0.1:11500/proxy/info 2>/dev/
 else
   echo "down"
 fi
+
+printf '%-28s :%-5s ' "Laya classifier" "18000"
+if laya_info="$(curl -sf --max-time 3 http://127.0.0.1:18000/health 2>/dev/null)"; then
+  echo "up $(jq -c '{loaded,device}' <<< "$laya_info")"
+else
+  echo "down"
+fi

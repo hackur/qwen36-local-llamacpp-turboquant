@@ -45,10 +45,18 @@ function baseConfig(jevCfg, filterCfg) {
 async function run(body, config, handler) {
   const { server, port } = await stubJev(handler);
   try {
+    // Point both classifier sections at the stub; the checked-in config's
+    // loopback URL is otherwise unreachable from the test process.
+    const url = `http://127.0.0.1:${port}`;
+    const wired = {
+      ...config,
+      jev: { ...config.jev, local_url: url },
+      tool_filter: config.tool_filter ? { ...config.tool_filter, local_url: url } : config.tool_filter,
+    };
     return await rewriteRequest({
       body, tokenizer: makeTokenizer(),
       cacheDir: mkdtempSync(resolve(tmpdir(), "toolfilt-")),
-      nCtx: 1000000, config,
+      nCtx: 1000000, config: wired,
     });
   } finally {
     await new Promise((r) => server.close(() => r()));

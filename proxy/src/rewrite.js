@@ -351,7 +351,10 @@ export async function rewriteRequest({
   };
   let toolFilter = null;
   if (filterArmed) {
-    const inTaxonomy = toolsetChoice && Object.prototype.hasOwnProperty.call(taxonomy, toolsetChoice);
+    // Boolean coercion matters: a null choice (classifier down) must yield
+    // passes === false, not `null`, or telemetry consumers comparing
+    // strictly see an ambiguous verdict.
+    const inTaxonomy = Boolean(toolsetChoice) && Object.prototype.hasOwnProperty.call(taxonomy, toolsetChoice);
     const isAll = inTaxonomy && taxonomy[toolsetChoice] === "all";
     const passes = toolsetChoice === "all" || isAll || (inTaxonomy && Array.isArray(taxonomy[toolsetChoice]) && toolsetConfidence >= filterGate);
     const selectedNames = toolsetChoice === "all" || isAll ? toolNames(body.tools) : (inTaxonomy && Array.isArray(taxonomy[toolsetChoice]) ? taxonomy[toolsetChoice] : []);

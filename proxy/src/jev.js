@@ -110,29 +110,53 @@ export async function jevEvaluate(state, questions, opts = {}) {
   return null;
 }
 
+// Build the question set for one Laya pass. `routeCriteria` is the same
+// question taxonomy the compact gate uses (route: local_direct|local_think|compact);
+// `riskCriteria` is the tool-call-danger scale; `toolsetCriteria` maps question
+// intent to a tool-set label from a caller-provided taxonomy (labels are free-form,
+// one per available tool set).
+export function buildRouteQuestions({ routeCriteria = DEFAULT_ROUTE_CRITERIA, riskCriteria, toolsetCriteria }) {
+  const questions = {
+    needs_thinking: {
+      type: "noul",
+      instructions: "Needs deep reasoning vs direct lookup?",
+    },
+    route: {
+      type: "choice",
+      instructions: "Pick handler",
+      criteria: routeCriteria,
+    },
+    risk: {
+      type: "score",
+      instructions: "Tool-call danger",
+      criteria: Array.isArray(riskCriteria) && riskCriteria.length > 0 ? riskCriteria : ["safe", "sensitive", "dangerous"],
+    },
+  };
+  if (toolsetCriteria && typeof toolsetCriteria === "object" && Object.keys(toolsetCriteria).length > 0) {
+    questions.toolset = {
+      type: "choice",
+      instructions: "Which tool set should be included in context for this request?",
+      criteria: toolsetCriteria,
+    };
+  }
+  return questions;
+}
+
+const DEFAULT_ROUTE_CRITERIA = {
+  local_direct: "Lookup, extract, small edit, no thinking",
+  local_think: "Arch, debug, multi-step",
+  compact: "Context too long, summarize first",
+};
+
+// Classify one request for routing. toolsetCriteria: { label: "description" }.
+// When given, the answer includes toolset (label) + toolsetConfidence; otherwise
+// that pair is null/0 so existing callers are unaffected.
 export async function routeLocalRequest(stateText, opts = {}) {
+  const routeCriteria = opts.routeCriteria && typeof opts.routeCriteria === "object" ? opts.routeCriteria : DEFAULT_ROUTE_CRITERIA;
+  const riskCriteria = Array.isArray(opts.riskCriteria) && opts.riskCriteria.length > 0 ? opts.riskCriteria : ["safe", "sensitive", "dangerous"];
   const out = await jevEvaluate(
     stateText,
-    {
-      needs_thinking: {
-        type: "noul",
-        instructions: "Needs deep reasoning vs direct lookup?",
-      },
-      route: {
-        type: "choice",
-        instructions: "Pick handler",
-        criteria: {
-          local_direct: "Lookup, extract, small edit, no thinking",
-          local_think: "Arch, debug, multi-step",
-          compact: "Context too long, summarize first",
-        },
-      },
-      risk: {
-        type: "score",
-        instructions: "Tool-call danger",
-        criteria: ["safe", "sensitive", "dangerous"],
-      },
-    },
+    buildRouteQuestions({ routeCriteria, riskCriteria, toolsetCriteria: opts.toolsetCriteria }),
     opts
   );
   if (!out) return null;
@@ -143,5 +167,7 @@ export async function routeLocalRequest(stateText, opts = {}) {
     route: out.answers?.route?.choice ?? "local_think",
     routeConfidence: out.answers?.route?.confidence ?? 0,
     risk: out.answers?.risk?.score ?? 0,
+    toolset: out.answers?.toolset?.choice ?? null,
+    toolsetConfidence: out.answers?.toolset?.confidence ?? 0,
   };
 }

@@ -1,5 +1,8 @@
 # Current work
 
+- [ ] Soak `tool_filter` in shadow mode; tune `tool_filter.taxonomy` to this
+      harness's actual tool names and the confidence gate, then decide on
+      `enforce` (see docs/laya.md, Tool-set routing).
 - [ ] Record a cool-chassis N=5 adaptive-MTP versus no-MTP benchmark using
       `benchmarks/suites/qwen38-features.yaml`.
 - [ ] Recheck the open TurboQuant Qwen3.8 VRAM-regression report before future

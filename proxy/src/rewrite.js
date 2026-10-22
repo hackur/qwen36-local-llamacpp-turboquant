@@ -1,6 +1,9 @@
 // Rewrite pipeline orchestrator. Wires verbatim window + Tier 1 elision into
 // a single async entry point used by the server. Optional JEV routing can
 // tighten Tier 0/Tier 1 thresholds; other compaction stages remain gated.
+// The same single Laya pass also predicts the tool set the request needs
+// (config `tool_filter`); shadow mode logs the pick, enforce mode trims the
+// forwarded tools list. See docs/laya.md for the taxonomy and gates.
 // Same-model summaries, notes, and extractive fallback are implemented below
 // and disabled in the checked-in config.
 //
@@ -49,15 +52,43 @@ export async function rewriteRequest({
 }) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   const wm = config.watermarks || {};
+  const jevCfg = config.jev || {};
+  // Phase 7 shared classifier pass. Routing and tool-set prediction ride ONE
+  // /v1/systemone call: when tool_filter is armed (taxonomy set, mode
+  // shadow|enforce, tools in body) the same pass also asks the `toolset`
+  // question, so the classifier hot path costs one request regardless of how
+  // many consumers are active. The tool_filter section's local_url/model win
+  // over the jev section for the shared call when set (checked-in config
+  // keeps both identical); the timeout is the max of both so neither consumer
+  // is cut short.
+  const filterCfg = config.tool_filter || {};
+  const filterMode = filterCfg.mode || "shadow";
+  const taxonomy = filterCfg.taxonomy && typeof filterCfg.taxonomy === "object" ? filterCfg.taxonomy : null;
+  const filterArmed = Boolean(taxonomy) && (filterMode === "shadow" || filterMode === "enforce") && Array.isArray(body?.tools) && body.tools.length > 0;
+  const classifyUrl = filterCfg.local_url || jevCfg.local_url;
+  const classifyModel = filterCfg.model || jevCfg.model;
+  const classifyTimeout = Math.max(jevCfg.timeout_ms ?? 300, filterCfg.timeout_ms ?? 300);
   let jevRoute = null;
   let jevConfidence = 0;
-  const jevCfg = config.jev || {};
-  if (jevCfg.local_url) {
+  let toolsetChoice = null;
+  let toolsetConfidence = 0;
+  if (classifyUrl) {
     try {
       const lastUser = [...messages].reverse().find((m) => m?.role === "user");
       const stateText = typeof lastUser?.content === "string" ? lastUser.content : JSON.stringify(lastUser?.content ?? messages.slice(-3));
-      const jr = await routeLocalRequest(stateText.slice(0, 4000), { localUrl: jevCfg.local_url || undefined, model: jevCfg.model, mode: jevCfg.mode || "local-first", timeoutMs: jevCfg.timeout_ms ?? 300 });
-      if (jr) { jevRoute = jr.route; jevConfidence = jr.routeConfidence ?? 0; }
+      const jr = await routeLocalRequest(stateText.slice(0, 4000), {
+        localUrl: classifyUrl,
+        model: classifyModel,
+        mode: jevCfg.mode || "local-first",
+        timeoutMs: classifyTimeout,
+        toolsetCriteria: filterArmed ? taxonomy : undefined,
+      });
+      if (jr) {
+        jevRoute = jr.route;
+        jevConfidence = jr.routeConfidence ?? 0;
+        toolsetChoice = jr.toolset ?? null;
+        toolsetConfidence = jr.toolsetConfidence ?? 0;
+      }
     } catch { jevRoute = null; }
   }
   const jevForced = jevRoute === "compact" && jevConfidence >= 0.6;
@@ -296,6 +327,41 @@ export async function rewriteRequest({
     },
   });
 
+  // Phase 7 gate: apply the tool-set prediction from the shared Laya pass at
+  // the top of this function. When the classifier picks a known tool set (or
+  // "all") with confidence above the gate, enforce mode forwards the request
+  // with ONLY that set's tools so a capable but context-bloat-prone model
+  // gets a shorter, clearer tool surface. Below gate, unknown label,
+  // classifier down, or no tools in the body: passthrough (no filter, no
+  // loss). Shadow mode never drops tools; it records the decision in stats
+  // for offline tuning before enforce is enabled.
+  const filterGate = typeof filterCfg.confidence === "number" ? filterCfg.confidence : 0.6;
+  const toolsByName = (list) => {
+    const m = new Map();
+    for (const t of list || []) {
+      const n = t?.function?.name;
+      if (n && !m.has(n)) m.set(n, t);
+    }
+    return m;
+  };
+  const toolNames = (list) => [...toolsByName(list).keys()];
+  const allTools = toolsByName(body?.tools);
+  const pickTools = (names) => {
+    return [...new Set(names)].filter((n) => allTools.has(n)).map((n) => allTools.get(n));
+  };
+  let toolFilter = null;
+  if (filterArmed) {
+    const inTaxonomy = toolsetChoice && Object.prototype.hasOwnProperty.call(taxonomy, toolsetChoice);
+    const isAll = inTaxonomy && taxonomy[toolsetChoice] === "all";
+    const passes = toolsetChoice === "all" || isAll || (inTaxonomy && Array.isArray(taxonomy[toolsetChoice]) && toolsetConfidence >= filterGate);
+    const selectedNames = toolsetChoice === "all" || isAll ? toolNames(body.tools) : (inTaxonomy && Array.isArray(taxonomy[toolsetChoice]) ? taxonomy[toolsetChoice] : []);
+    const selectedKnown = toolNames(pickTools(selectedNames));
+    toolFilter = { choice: toolsetChoice, confidence: toolsetConfidence, passes, selected: passes ? selectedKnown : toolNames(body.tools), dropped: passes ? toolNames(body.tools).filter((n) => !selectedKnown.includes(n)) : [] };
+    if (passes && filterMode === "enforce") {
+      body.tools = pickTools(selectedNames);
+    }
+  }
+
   // Inject phantom tool def if any stubs landed.
   let tools = body?.tools;
   if (elidedIds.length > 0) {
@@ -328,6 +394,7 @@ export async function rewriteRequest({
       sumy_used: sumyUsed,
       jev_route: jevRoute,
       jev_confidence: jevConfidence,
+      tool_filter: toolFilter ? { choice: toolFilter.choice, confidence: toolFilter.confidence, passes: toolFilter.passes, mode: filterMode, selected: toolFilter.selected, dropped: toolFilter.dropped } : null,
     },
   };
 }

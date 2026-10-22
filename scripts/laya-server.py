@@ -23,8 +23,20 @@ class LocalRouter(Router):
 
 if __name__ == "__main__":
     torch.set_num_threads(int(os.environ.get("LAYA_THREADS", "8")))
-    checkpoint = snapshot_download(checkpoint_config.REPO_ID,
-                                   revision=checkpoint_config.REVISION, local_files_only=True)
+    try:
+        checkpoint = snapshot_download(checkpoint_config.REPO_ID,
+                                       revision=checkpoint_config.REVISION, local_files_only=True)
+    except Exception as error:  # noqa: BLE001 - LaunchAgent log gets one clear line
+        raise SystemExit(
+            f"Laya checkpoint cache unavailable: {error}\n"
+            f"expected: {checkpoint_config.REPO_ID} @ {checkpoint_config.REVISION}\n"
+            "run 'make laya-download' (or 'make laya-install') first, then restart the service"
+        ) from error
+    if not (Path(checkpoint) / "model.safetensors").exists():
+        raise SystemExit(
+            f"Laya checkpoint incomplete in cache: {checkpoint}\n"
+            "run 'make laya-download' (or 'make laya-install') first, then restart the service"
+        )
     router = LocalRouter(models={"typed-decisions": checkpoint},
                     device=os.environ.get("LAYA_DEVICE", "cpu"),
                     default="typed-decisions", max_loaded=1,

@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### Proxy tool-set routing (Phase 7)
+
+- The `tool_filter` section in `proxy/config.yaml` (checked in as `shadow`)
+  adds a `toolset` choice question to the SAME single Laya `/v1/systemone`
+  pass that answers route classification, so the classifier hot path costs
+  one call per request regardless of how many consumers are active. Its
+  `local_url` / `model` (empty = reuse the `jev` section's) apply to the
+  shared call, and the timeout is the max of both sections' timeouts.
+- The `taxonomy` maps each label to a list of tool names to keep (or the
+  string `all` = never filter). Tune the labels and names to your harness's
+  actual tool names; labels unknown to the taxonomy never pass the gate.
+- Gate: choice is `all`, the label maps to `all`, or the label is in the
+  taxonomy with confidence >= `tool_filter.confidence` (default 0.6).
+  `enforce` mode then forwards the request with ONLY that set's tools; the
+  checked-in `shadow` mode records the decision instead. Per-request
+  telemetry gains a `rewrite.tool_filter` entry
+  `{choice, confidence, passes, mode, selected, dropped}`.
+- Fails open everywhere: classifier down, timeout, low confidence, unknown
+  label, or a request with no tools leaves the forwarded tool list
+  unchanged.
+- `proxy/src/jev.js`: `routeLocalRequest` now accepts `toolsetCriteria` and
+  returns `toolset` / `toolsetConfidence`; the question builder is exported
+  as `buildRouteQuestions` so callers and tests share one taxonomy source.
+- New `proxy/tests/tool-filter.test.js`: shadow, enforce, low-confidence,
+  unknown-label, `all`, no-tools, and classifier-down (fail-open) cases.
+- `scripts/laya-server.py` exits with an actionable message when the pinned
+  checkpoint cache is missing or incomplete (`make laya-download` first),
+  instead of a raw huggingface_hub traceback inside the LaunchAgent.
+- `docs/laya.md` gains a Tool-set routing section; `docs/proxy.md` notes the
+  shared pass and the `tool_filter` capability.
+
 ### Local Laya classifier service
 
 - Added `scripts/laya.sh`, `scripts/laya-server.py`, and

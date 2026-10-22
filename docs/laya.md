@@ -49,6 +49,35 @@ In shadow mode the proxy evaluates the classifier and candidate rewrite, records
 Use `mode: enforce` to apply the candidate rewrite. Direct traffic to `:10501`
 bypasses the Node proxy; send chat requests to `:11500` to use Laya.
 
+## Tool-set routing (Phase 7)
+
+The same single `/v1/systemone` pass that answers the route question also
+answers a `toolset` question when the `tool_filter` section of
+`proxy/config.yaml` is armed (a `taxonomy` is set, `mode` is `shadow` or
+`enforce`, and the request carries tools). Routing and tool-set prediction
+therefore cost one classifier call per request, not two; `tool_filter`'s
+`local_url` / `model` (empty = reuse the `jev` section's) apply to that shared
+call, and its timeout is the max of both sections' timeouts.
+
+The `taxonomy` maps each label to a list of tool names to keep, or the string
+`all` (never filter). The checked-in labels are generic; tune them to your
+harness's actual tool names — a label the classifier emits that is absent from
+the taxonomy simply never passes the gate. The gate passes when the choice is
+`all`, the label maps to `all`, or the label is in the taxonomy with
+confidence >= `tool_filter.confidence` (default 0.6).
+
+- `shadow` (checked-in default): the decision is recorded in per-request
+  telemetry as `rewrite.tool_filter`
+  `{choice, confidence, passes, mode, selected, dropped}`; the forwarded
+  tools list is never modified. Use it to tune the taxonomy and gate.
+- `enforce`: the request is forwarded with ONLY the selected set's tools,
+  giving a capable but context-bloat-prone model a shorter, clearer tool
+  surface. Tool names in the taxonomy that are not in the request are ignored.
+
+The feature fails open in every failure mode — classifier down, timeout,
+low confidence, unknown label, or a request without tools — and forwards the
+original full tool list.
+
 The classifier chooses a handler label, reasoning probability and risk score.
 The existing rewrite logic uses only `compact` at confidence >= 0.6 to tighten
 compaction thresholds. It does not switch the main language model or execute

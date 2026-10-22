@@ -370,6 +370,7 @@ export function createProxyServer({
           orig_tokens: rewrite.stats.orig_tokens,
           rewritten_tokens: rewrite.stats.rewritten_tokens,
           elided_ids: rewrite.stats.elided_tool_result_ids,
+          tool_filter: rewrite.stats.tool_filter ?? null,
         },
         "shadow rewrite (not forwarded)",
       );
@@ -513,6 +514,7 @@ export function createProxyServer({
             elided_ids: rewrite.stats.elided_tool_result_ids,
             jev_route: rewrite.stats.jev_route,
             jev_confidence: rewrite.stats.jev_confidence,
+            tool_filter: rewrite.stats.tool_filter ?? null,
           }
         : null,
       phantom_answered: phantomAnswered,

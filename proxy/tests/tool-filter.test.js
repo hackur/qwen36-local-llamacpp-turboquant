@@ -150,6 +150,29 @@ test("unknown label: no filtering", async () => {
   assert.deepEqual(names, TOOLS.map((t) => t.function.name));
 });
 
+test("enforce: predicted set shares no names with the request fails open", async () => {
+  const r = await run(
+    { model: "s", messages: [{ role: "user", content: "find the config" }], tools: TOOLS },
+    baseConfig(
+      { local_url: "http://127.0.0.1:1", model: "typed-decisions", mode: "local-only", timeout_ms: 300 },
+      { mode: "enforce", confidence: 0.6, taxonomy: { browse: ["WebSearch", "WebFetch"] }, timeout_ms: 300 }
+    ),
+    respond({
+      needs_thinking: { noul: 0.1 },
+      route: { choice: "local_direct", confidence: 0.9 },
+      risk: { score: 0 },
+      toolset: { choice: "browse", confidence: 0.9 },
+    })
+  );
+  // browse maps to WebSearch/WebFetch but the request only carries
+  // Read/Grep/Bash/Edit/Fetch. Trimming would drop EVERY tool, so the
+  // gate fails open instead of zeroing the model's tool surface.
+  assert.equal(r.stats.tool_filter.passes, false);
+  assert.deepEqual(r.stats.tool_filter.dropped, []);
+  const names = r.rewrittenBody.tools.map((t) => t.function.name);
+  assert.deepEqual(names, TOOLS.map((t) => t.function.name));
+});
+
 test("choice all: passes, nothing dropped", async () => {
   const r = await run(
     { model: "s", messages: [{ role: "user", content: "do everything" }], tools: TOOLS },

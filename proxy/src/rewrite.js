@@ -356,9 +356,14 @@ export async function rewriteRequest({
     // strictly see an ambiguous verdict.
     const inTaxonomy = Boolean(toolsetChoice) && Object.prototype.hasOwnProperty.call(taxonomy, toolsetChoice);
     const isAll = inTaxonomy && taxonomy[toolsetChoice] === "all";
-    const passes = toolsetChoice === "all" || isAll || (inTaxonomy && Array.isArray(taxonomy[toolsetChoice]) && toolsetConfidence >= filterGate);
+    const gatePass = toolsetChoice === "all" || isAll || (inTaxonomy && Array.isArray(taxonomy[toolsetChoice]) && toolsetConfidence >= filterGate);
     const selectedNames = toolsetChoice === "all" || isAll ? toolNames(body.tools) : (inTaxonomy && Array.isArray(taxonomy[toolsetChoice]) ? taxonomy[toolsetChoice] : []);
     const selectedKnown = toolNames(pickTools(selectedNames));
+    // An empty intersection means the predicted set shares no tool names
+    // with this request (taxonomy/harness mismatch). Trimming would leave
+    // the model with zero tools, so fail open exactly like unknown-label
+    // cases: keep the full list and record passes === false.
+    const passes = gatePass && selectedKnown.length > 0;
     toolFilter = { choice: toolsetChoice, confidence: toolsetConfidence, passes, selected: passes ? selectedKnown : toolNames(body.tools), dropped: passes ? toolNames(body.tools).filter((n) => !selectedKnown.includes(n)) : [] };
     if (passes && filterMode === "enforce") {
       body.tools = pickTools(selectedNames);

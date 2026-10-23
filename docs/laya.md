@@ -75,8 +75,9 @@ confidence >= `tool_filter.confidence` (default 0.6).
   surface. Tool names in the taxonomy that are not in the request are ignored.
 
 The feature fails open in every failure mode — classifier down, timeout,
-low confidence, unknown label, or a request without tools — and forwards the
-original full tool list.
+low confidence, unknown label, a predicted set that matches none of the
+request's tools (trimming would leave the model with zero tools), or a
+request without tools — and forwards the original full tool list.
 
 The classifier chooses a handler label, reasoning probability and risk score.
 The existing rewrite logic uses only `compact` at confidence >= 0.6 to tighten

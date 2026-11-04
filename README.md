@@ -1,7 +1,12 @@
-# Qwen3.8 Local TurboQuant
+# Local Model Harness
 
-One supported model: **Qwen3.8-27B Q8_0** on Apple Silicon through the pinned
-TurboQuant llama.cpp fork. The model server listens on `:10501`; an optional
+This repository is the source of truth for local model usage: llama.cpp
+engines, model profiles, the compaction proxy, optional Laya classifier,
+browser workflows and agent handoff conventions. Past, present and future
+models belong here with explicit compatibility and validation records.
+
+The current primary profile is **Qwen3.8-27B Q8_0** on Apple Silicon through
+the pinned TurboQuant llama.cpp fork. The model server listens on `:10501`; an optional
 Node compaction proxy can listen on `:11500` when started separately.
 
 The default runtime on `http://127.0.0.1:10501` enables:
@@ -13,9 +18,15 @@ The default runtime on `http://127.0.0.1:10501` enables:
 - Qwen3.8 thinking mode and preserved reasoning history;
 - llama.cpp metrics, native WebUI, WebUI MCP CORS proxy, and all built-in agent tools.
 
-No fallback models, draft sidecars, embedding models, custom chat templates,
-or legacy model aliases are supported. Historical implementations remain in
-git history, not in the working tree.
+Profiles have separate capabilities; Qwen-specific MTP, cache settings and
+projectors must not be assumed to work with another model. See
+[experimental models](docs/experimental-models.md) for LFM3 and existing 9B
+Qwen derivatives, and the [agent harness contract](docs/agent-harness.md)
+for the preferred OpenClaw browser route and source-preserving handoffs.
+Routing is explicit; adding a model or tool does not activate it.
+Use `python3 scripts/models.py list` and `start <profile>` for a shared
+foreground entry point. See the [engine normalization audit](docs/engine-normalization.md)
+for source/build differences, safe unloading and upstream-port options.
 
 ## Quick start
 
@@ -33,6 +44,24 @@ If the model is managed by the macOS login agent, use `make service-status`,
 so killing `llama-server` alone causes a restart. `make stop` also stops the
 agent and leaves its registration in place. See [service controls](docs/service.md)
 for registration, restart, and removal.
+
+The plist runs the launcher in `foreground` mode, so the launchd job's PID is
+`llama-server` itself: launchd owns the full lifecycle (signals, crash
+restarts) and no shell stays parent of the server. Start/stop/restart for each
+server:
+
+| Server | Start | Stop | Restart |
+| --- | --- | --- | --- |
+| Model (`:10501`) | `make service-start` (or `make start`) | `make stop` | `make service-restart` / `make restart` |
+| Baseline (`:10500`) | `make start-baseline` | `make stop` | `make restart-baseline` |
+| Proxy (`:11500`) | `make proxy-start` | `make proxy-stop` | `make proxy-restart` |
+| Laya (`:18000`) | `make laya-start` | `make laya-stop` | `make laya-restart` |
+
+`make start-all [M=<profile>]` brings up model + proxy together (`LAYA=1`
+adds the classifier); `make restart-all` is `make stop` + `make start-all`.
+`make switch M=<crow-9b|qwen38>` swaps model profiles; add `--with-proxy`
+to the script (`scripts/switch-model.sh`) to bring the proxy back up against
+the new model alias.
 
 Finder users can double-click `Qwen3.8.command`.
 
@@ -72,7 +101,10 @@ MCP_CONFIG=/abs/path/mcp.json make start-foreground
 
 `make start-baseline` runs the same weights and projector through mainline
 llama.cpp with f16 KV and no MTP. It exists only as a controlled comparison.
-It inherits the `AGENT` default unless overridden.
+It inherits the `AGENT` default unless overridden. It runs in the foreground
+by default; `scripts/start-baseline.sh background [port] [ctx]` (used by
+`make restart-baseline`) backgrounds it with a bounded health wait so it can
+run alongside the turboquant primary for parallel A/B benchmarks.
 
 ## Local validation
 
@@ -92,6 +124,8 @@ the meaningful tests require this Mac, these GGUFs, Metal, and a cool chassis.
 
 ## Documentation
 
+- [Agent harness and OpenClaw browser workflow](docs/agent-harness.md)
+- [Experimental model profiles](docs/experimental-models.md)
 - [Architecture and feature flags](docs/architecture.md)
 - [Usage and API examples](docs/usage.md)
 - [macOS service controls](docs/service.md)

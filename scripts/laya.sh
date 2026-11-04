@@ -2,6 +2,7 @@
 # Install, download, and manage the local Laya classifier on :18000.
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$REPO/scripts/_common.sh"   # provides PORT_LAYA
 PYTHON="$REPO/vendor/laya-venv/bin/python"
 LABEL=com.local.qwen.laya
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
@@ -32,8 +33,8 @@ case "${1:-status}" in
     if launchctl print "$TARGET" >/dev/null 2>&1; then
       launchctl kickstart "$TARGET"
     else
-      if lsof -nP -iTCP:18000 -sTCP:LISTEN -t >/dev/null 2>&1; then
-        echo "port 18000 is already occupied" >&2; exit 1
+      if lsof -nP -iTCP:$PORT_LAYA -sTCP:LISTEN -t >/dev/null 2>&1; then
+        echo "port $PORT_LAYA is already occupied" >&2; exit 1
       fi
       mkdir -p "$REPO/logs" "$(dirname "$PLIST")"
       python3 - "$REPO" "$PLIST" "$LABEL" <<'PY'
@@ -56,6 +57,12 @@ PY
     if launchctl print "$TARGET" >/dev/null 2>&1; then launchctl bootout "$TARGET"; fi
     echo "Laya stopped; login plist retained"
     ;;
-  status) curl -fsS --max-time 3 http://127.0.0.1:18000/health; echo ;;
-  *) echo "usage: $0 {install|download|foreground|start|stop|status}" >&2; exit 2 ;;
+  restart)
+    # stop boots out the job, so start takes the bootstrap path and the server
+    # comes back clean (checkpoint re-verified there too).
+    "$0" stop
+    "$0" start
+    ;;
+  status) curl -fsS --max-time 3 http://127.0.0.1:$PORT_LAYA/health; echo ;;
+  *) echo "usage: $0 {install|download|foreground|start|restart|stop|status}" >&2; exit 2 ;;
 esac

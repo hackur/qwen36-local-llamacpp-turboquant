@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-04 — Local model harness
+
+- Broaden the project contract to model profiles, proxy, classifier, browser
+  tools and source-preserving handoffs; prefer the installed OpenClaw CLI.
+- Add a common foreground model entry point, preserving per-engine features
+  and the working Qwen/LFM3/9B builds; document upstream-port options.
+- Archive complete supplied browser captures with provenance, hashes, readable
+  views and explicit handoff truncation. Mark bounded research previews.
+- Include the pending service/lifecycle improvements and experimental profiles;
+  fix baseline defaults, text-only projector handling and model-switch helpers.
+- Keep private artifacts ignored and scan feature-branch history before pushes.
+
+
 ## Unreleased
 
 ### Proxy tool-set routing (Phase 7)

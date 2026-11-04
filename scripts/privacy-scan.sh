@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Public privacy scan: checks the current tree and every commit reachable from
-# main or a tag for private paths, identities, artifacts, and secrets.
+# HEAD, main or a tag for private paths, identities, artifacts, and secrets.
 set -euo pipefail
 
 case "${1:-}" in
@@ -25,7 +25,7 @@ fi
 echo "  ✓ current tree"
 
 : >"$SCAN_DIR/history.txt"
-git rev-list main --tags | while read -r commit; do
+git rev-list HEAD main --tags | while read -r commit; do
   git grep -n -I -E "$PATTERN" "$commit" \
     -- . ':!scripts/static-check.sh' ':!scripts/privacy-scan.sh' ':!LICENSE' ':!docs/troubleshooting.md' \
     >>"$SCAN_DIR/history.txt" || true
@@ -38,7 +38,7 @@ if [[ -s "$SCAN_DIR/history.txt" ]]; then
 fi
 echo "  ✓ reachable file history"
 
-git log main --tags --format='%H%x09%aE%x09%cE' | \
+git log HEAD main --tags --format='%H%x09%aE%x09%cE' | \
   awk -F '\t' 'tolower($2) == "jcsarda@gmail.com" || tolower($3) == "jcsarda@gmail.com" {print substr($1, 1, 12)}' \
   >"$SCAN_DIR/identities.txt"
 if [[ -s "$SCAN_DIR/identities.txt" ]]; then
@@ -48,7 +48,7 @@ if [[ -s "$SCAN_DIR/identities.txt" ]]; then
 fi
 echo "  ✓ commit identities"
 
-git rev-list main --tags --objects | cut -d' ' -f2- | \
+git rev-list HEAD main --tags --objects | cut -d' ' -f2- | \
   grep -E '(^|/)\.playwright-mcp/|(^|/)(\.env($|\.)|id_(rsa|ed25519)|.*\.(pem|key|p12|pfx|kdbx|sqlite|db|har|pcap))$' \
   >"$SCAN_DIR/artifacts.txt" || true
 if [[ -s "$SCAN_DIR/artifacts.txt" ]]; then
@@ -59,7 +59,7 @@ fi
 echo "  ✓ no private artifacts"
 
 if command -v gitleaks >/dev/null 2>&1; then
-  if ! gitleaks git "$REPO" --log-opts='main --tags' --redact=100 \
+  if ! gitleaks git "$REPO" --log-opts='HEAD main --tags' --redact=100 \
     --report-format=json --report-path="$SCAN_DIR/gitleaks.json" --no-banner --no-color \
     >/dev/null 2>&1; then
     if command -v jq >/dev/null 2>&1; then

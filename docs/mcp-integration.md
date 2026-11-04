@@ -45,3 +45,5 @@ Agent/MCP mode is not strictly offline. Use `make start-offline` for untrusted
 content or a network-isolation proof.
 
 Source: [TurboQuant server documentation](https://github.com/TheTom/llama-cpp-turboquant/blob/feature/turboquant-kv-cache/tools/server/README.md#built-in-tools-support).
+
+For model-driven browser manipulation, prefer the [OpenClaw gateway route](agent-harness.md#browser-route-openclaw-gateway) with an executing host tool loop. The WebUI CORS proxy alone is not a browser automation driver.

@@ -19,15 +19,18 @@ REPO = Path(__file__).resolve().parents[1]
 class StopAllScannerTests(unittest.TestCase):
     """The awk program in stop-all.sh must select exactly the repo's model servers."""
 
+    # The scanner lives in _common.sh: list_pids_by_repo_cmd. stop-all.sh is a
+    # thin wrapper that sources it (the kill discipline and PID discovery both
+    # live in _common.sh so every stop path shares one implementation).
     AWK_SOURCE_RE = re.compile(
         r"ps -axww -o pid=,command= \| awk -v repo=.*?\n(.*?)\n  ' \| sort -u",
         re.DOTALL,
     )
 
     def _awk_program(self):
-        source = (REPO / "scripts" / "stop-all.sh").read_text()
+        source = (REPO / "scripts" / "_common.sh").read_text()
         match = self.AWK_SOURCE_RE.search(source)
-        self.assertIsNotNone(match, "stop-all.sh: ps/awk scanner not found")
+        self.assertIsNotNone(match, "_common.sh: list_pids_by_repo_cmd ps/awk scanner not found")
         return match.group(1)
 
     def _scan(self, repo: str, ps_lines: list[str]) -> set[str]:
@@ -84,30 +87,43 @@ class StopAllScannerTests(unittest.TestCase):
 
 
 class StopProxyScannerTests(unittest.TestCase):
-    """stop-proxy.sh discovers the proxy by its LISTEN port, never argv."""
+    """The proxy stop path discovers the proxy by its LISTEN port, never argv.
+
+    stop-proxy.sh is a thin wrapper over _common.sh: discovery is
+    list_pids_by_port (lsof LISTEN only) and the kill discipline is
+    kill_pids_by (two-phase SIGTERM -> SIGKILL, re-scan, survivors report).
+    """
 
     def test_uses_lsof_listen_only(self):
-        source = (REPO / "scripts" / "stop-proxy.sh").read_text()
-        self.assertIn('lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t', source)
-        # The discovery function must be lsof-only; node argv matching
+        common = (REPO / "scripts" / "_common.sh").read_text()
+        # The shared discovery helper is lsof LISTEN-only; node argv matching
         # (pgrep -f) cannot distinguish this proxy from any other node process.
-        m = re.search(r"list_pids\(\) \{([^}]*)\}", source, re.DOTALL)
-        self.assertIsNotNone(m, "list_pids function not found")
+        self.assertIn('lsof -nP -iTCP:"$1" -sTCP:LISTEN -t', common)
+        m = re.search(r"list_pids_by_port\(\) \{([^}]*)\}", common, re.DOTALL)
+        self.assertIsNotNone(m, "list_pids_by_port function not found")
         self.assertNotIn("pgrep", m.group(1))
         self.assertNotIn("ps -ax", m.group(1))
+        # stop-proxy.sh must route discovery through the helper, not its own scan.
+        source = (REPO / "scripts" / "stop-proxy.sh").read_text()
+        self.assertIn('list_pids_by_port "$PORT"', source)
 
     def test_port_matches_checked_in_config(self):
-        # Keep the script's port in sync with proxy/config.yaml listen.port.
-        script_port = int(re.search(r"^PORT=(\d+)", (REPO / "scripts" / "stop-proxy.sh").read_text(), re.M).group(1))
+        # Keep the proxy's port in sync: configs/runtime.env PORT_PROXY (the
+        # single source of truth stop-proxy.sh reads) vs proxy/config.yaml.
+        runtime_env = (REPO / "configs" / "runtime.env").read_text()
+        env_port = int(re.search(r'^: "\$\{PORT_PROXY:=(\d+)\}"', runtime_env, re.M).group(1))
         import yaml  # available in the system python used by make check
         cfg = yaml.safe_load((REPO / "proxy" / "config.yaml").read_text())
-        self.assertEqual(script_port, cfg["listen"]["port"])
+        self.assertEqual(env_port, cfg["listen"]["port"])
 
     def test_two_phase_kill_discipline(self):
+        common = (REPO / "scripts" / "_common.sh").read_text()
+        self.assertIn("kill \"$pid\"", common)          # SIGTERM pass
+        self.assertIn("kill -9 \"$pid\"", common)       # SIGKILL stragglers
+        self.assertIn("survivors", common)             # loud failure report
+        # stop-proxy.sh must route the kill through the shared helper.
         source = (REPO / "scripts" / "stop-proxy.sh").read_text()
-        self.assertIn("kill \"$pid\"", source)          # SIGTERM pass
-        self.assertIn("kill -9 \"$pid\"", source)       # SIGKILL stragglers
-        self.assertIn("survivors", source)              # loud failure report
+        self.assertIn("kill_pids_by", source)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$REPO/scripts/_common.sh"   # provides PORT
 LABEL=com.local.qwen3-8.turboquant
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 TARGET="gui/$(id -u)/$LABEL"
@@ -11,21 +12,26 @@ DOMAIN="gui/$(id -u)"
 [[ "$(uname -s)" == Darwin ]] || { echo "launchd service management requires macOS" >&2; exit 1; }
 
 loaded() { launchctl print "$TARGET" >/dev/null 2>&1; }
-port_pid() { lsof -nP -iTCP:10501 -sTCP:LISTEN -t 2>/dev/null || true; }
+
+# True when the job is loaded AND the port actually has a listener. Used by
+# register: bootstrapping while a server already owns $PORT would spawn a
+# crashing KeepAlive loop (bind failure), so callers must stop it first.
+job_owns_port() {
+  loaded && [[ -n "$(port_pid)" ]]
+}
+port_pid() { lsof -nP -iTCP:$PORT -sTCP:LISTEN -t 2>/dev/null || true; }
 
 # Healthcheck used by install: after loading, the KeepAlive job must bring up
-# a listener on 10501 within the bounded wait. The 27B Q8_0 load on MTL0 takes
-# roughly 20-40 s, so allow 180 s before declaring failure.
+# a healthy server on $PORT within the bounded wait. The 27B Q8_0 load on MTL0
+# takes roughly 20-40 s, so allow 180 s before declaring failure.
 wait_for_listener() {
-  local deadline=$(( $(date +%s) + 180 )) pid
-  while (( $(date +%s) < deadline )); do
-    if pid="$(port_pid)" && [[ -n "$pid" ]]; then
-      echo "listener: port 10501 up (pid $pid)"
-      return 0
-    fi
-    sleep 3
-  done
-  echo "ERROR: no listener on 10501 after 180 s" >&2
+  local pid
+  if wait_for_health "$PORT" 180; then
+    pid="$(port_pid)"
+    echo "listener: port $PORT up (pid ${pid:-?})"
+    return 0
+  fi
+  echo "ERROR: no healthy server on $PORT after 180 s" >&2
   echo "  check logs/launchd.err and logs/qwen38.log" >&2
   return 1
 }
@@ -54,7 +60,7 @@ run_install_check() {
 ensure_port_available() {
   local pid
   pid="$(port_pid)"
-  [[ -z "$pid" ]] || { echo "port 10501 is already in use by pid(s) ${pid//$'\n'/,}; stop that server first" >&2; exit 1; }
+  [[ -z "$pid" ]] || { echo "port $PORT is already in use by pid(s) ${pid//$'\n'/,}; stop that server first" >&2; exit 1; }
 }
 
 case "${1:-}" in
@@ -67,9 +73,9 @@ case "${1:-}" in
       echo "stopped: launchd job is not loaded"
     fi
     if pids="$(port_pid)" && [[ -n "$pids" ]]; then
-      echo "port 10501 listener pid(s): ${pids//$'\n'/,}"
+      echo "port $PORT listener pid(s): ${pids//$'\n'/,}"
     else
-      echo "port 10501: no listener"
+      echo "port $PORT: no listener"
     fi
     ;;
   install)
@@ -78,14 +84,15 @@ case "${1:-}" in
   register)
     if [[ ! -f "$PLIST" ]]; then
       mkdir -p "$(dirname "$PLIST")" "$REPO/logs"
-      # Escape sed replacement metacharacters in the checkout path.
-      escaped_repo="$(printf '%s' "$REPO" | sed 's/[&|\\]/\\&/g')"
-      sed "s|__REPO__|$escaped_repo|g" "$REPO/configs/launchd-plist.template" > "$PLIST"
-      plutil -lint "$PLIST" >/dev/null
-      echo "registered: $PLIST"
-    else
-      echo "using existing plist (local settings preserved): $PLIST"
     fi
+    # Always render from the template so the plist tracks script changes
+    # (e.g. the `foreground` exec mode that gives launchd direct ownership of
+    # the server process). Re-registering never accumulates stale arguments.
+    # Escape sed replacement metacharacters in the checkout path.
+    escaped_repo="$(printf '%s' "$REPO" | sed 's/[&|\\]/\\&/g')"
+    sed "s|__REPO__|$escaped_repo|g" "$REPO/configs/launchd-plist.template" > "$PLIST"
+    plutil -lint "$PLIST" >/dev/null
+    echo "registered: $PLIST"
     if ! loaded; then ensure_port_available; launchctl bootstrap "$DOMAIN" "$PLIST"; fi
     echo "loaded: $TARGET"
     ;;
@@ -110,6 +117,9 @@ case "${1:-}" in
   restart)
     "$0" stop
     "$0" start
+    # stop/start only flips the job; wait so the caller knows the server is
+    # actually back (27B load: 20-40 s).
+    wait_for_listener
     ;;
   unregister|uninstall)
     "$0" stop

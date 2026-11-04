@@ -20,6 +20,12 @@ request. External MCP tools require `MCP_CONFIG`. Check the active set with:
 curl -s http://127.0.0.1:10501/tools | jq -r '.[].tool'
 ```
 
+`make restart [M=<profile>]` stops and restarts the model profile; the
+launchd-managed `qwen38` profile is the default (the launchd job owns the
+server process). `make switch M=<crow-9b|qwen38>` swaps profiles, and
+`scripts/switch-model.sh <profile> --with-proxy` also brings the compaction
+proxy back up against the new model alias.
+
 The independent context-compaction proxy starts with `make proxy-start` and
 listens on `:11500`. Clients must explicitly use that URL to pass through it.
 Its checked-in mode is `shadow` with local-only Laya classification; run

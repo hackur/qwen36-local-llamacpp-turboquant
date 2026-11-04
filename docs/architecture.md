@@ -1,6 +1,11 @@
 # Architecture
 
-The project has one model process and one optional lightweight proxy:
+The harness can host multiple explicitly selected model profiles. The current
+primary deployment has one model process and an optional lightweight proxy
+and classifier. Independent experiments use :10502; see
+[profiles](experimental-models.md) and [agent workflows](agent-harness.md).
+
+The primary deployment is:
 
 ```text
 clients ──────────────────────────────> TurboQuant llama-server :10501

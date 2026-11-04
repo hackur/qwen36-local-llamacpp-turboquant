@@ -12,6 +12,11 @@ source "$SCRIPT_DIR/_common.sh"
 case "${1:-}" in
   -h|--help) print_help_from_header; exit 0 ;;
   --dry-run) DRY_RUN=1 ;;
+  # Run the server as this script's direct child (exec, no pipeline/tee).
+  # Used by the launchd agent: the job's PID is the llama-server itself, so
+  # launchd owns its full lifecycle (SIGTERM/SIGKILL, restart, crash loops)
+  # and nothing is left hanging. Log goes to the job's stderr (launchd.err).
+  foreground|foreground*) MODE="foreground"; DRY_RUN=0 ;;
   "") DRY_RUN=0 ;;
   *) die "unknown argument: $1" ;;
 esac
@@ -31,6 +36,12 @@ if (( DRY_RUN )); then
   exit 0
 fi
 
+if [[ "${MODE:-}" == "foreground" ]]; then
+  ensure_port_free "$PORT"
+  preflight_memory
+  exec "${CMD[@]}" 2>&1
+fi
+
 ensure_no_other_llama_server
 ensure_port_free "$PORT"
 preflight_memory
@@ -40,7 +51,11 @@ log_banner "Starting Qwen3.8 full runtime on http://127.0.0.1:$PORT" | tee -a "$
 {
   echo "  model=$MODEL_FILE"
   echo "  context=$CTX kv=$KV_K/$KV_V mtp=$MTP_TYPE:$MTP_MIN-$MTP_MAX chain=$MTP_CHAIN"
-  echo "  vision=on reasoning-preserve=$REASONING_PRESERVE metrics=$METRICS agent=$AGENT"
+  if [[ -n "$MMPROJ_FILE" ]]; then
+    echo "  vision=on reasoning-preserve=$REASONING_PRESERVE metrics=$METRICS agent=$AGENT"
+  else
+    echo "  vision=off (no projector) reasoning-preserve=$REASONING_PRESERVE metrics=$METRICS agent=$AGENT"
+  fi
   echo "  log=$LOG"
 } | timestamp_logs | tee -a "$LOG"
 exec "${CMD[@]}" 2>&1 | timestamp_logs | tee -a "$LOG"

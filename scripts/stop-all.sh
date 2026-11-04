@@ -11,6 +11,7 @@
 #      didn't actually succeed.
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$REPO/scripts/_common.sh"   # kill_pids_by, list_pids_by_repo_cmd
 
 if [[ "${1:-}" != "--processes-only" ]]; then
   [[ $# -eq 0 ]] || { echo "usage: $0 [--processes-only]" >&2; exit 2; }
@@ -21,56 +22,12 @@ if [[ "${1:-}" != "--processes-only" ]]; then
   fi
 fi
 
-list_pids() {
-  # NOTE: pgrep -f cannot see the llama-server on this system (its 700+ char
-  # command line exceeds what pgrep scans), so match with ps instead. ps -ww
-  # prints the full command line, so the anchored vendor-path patterns keep
-  # working and cannot hit unrelated llama-server processes.
-  /bin/ps -axww -o pid=,command= | awk -v repo="$REPO" '
-    index($0, repo "/vendor/llama.cpp-mainline/build/bin/llama-server")     { print $1 }
-    index($0, repo "/vendor/llama-cpp-turboquant/build/bin/llama-server")    { print $1 }
-  ' | sort -u
-}
-
-found_any=0
-max_passes=5
-for ((pass=1; pass<=max_passes; pass++)); do
-  pids=()
-  while read -r pid; do [[ -n "$pid" ]] && pids+=("$pid"); done < <(list_pids)
-  (( ${#pids[@]} == 0 )) && break
-
-  found_any=1
-  for pid in "${pids[@]}"; do
-    cmd=$(ps -p "$pid" -o command= 2>/dev/null | head -c 120)
-    echo "  [pass $pass] kill $pid : $cmd"
-    kill "$pid" 2>/dev/null || true
-  done
-
-  sleep 2
-
-  # SIGKILL anything still alive from this pass.
-  for pid in "${pids[@]}"; do
-    if kill -0 "$pid" 2>/dev/null; then
-      echo "  [pass $pass] SIGKILL $pid (didn't exit gracefully)"
-      kill -9 "$pid" 2>/dev/null || true
-    fi
-  done
-done
-
-if [[ $found_any -eq 0 ]]; then
-  echo "(no model server or proxy processes from this repo were running)"
-  exit 0
-fi
-
-# Verify: nothing should remain. If something does, surface it loudly.
-remaining=()
-while read -r pid; do [[ -n "$pid" ]] && remaining+=("$pid"); done < <(list_pids)
-if (( ${#remaining[@]} > 0 )); then
-  echo "❌ Survivors after $max_passes passes (model servers and proxy) — investigate manually:" >&2
-  for pid in "${remaining[@]}"; do
-    ps -p "$pid" -o pid=,ppid=,command= 2>/dev/null >&2 || true
-  done
+# The two-phase kill + verify is in _common.sh. list_pids_by_repo_cmd matches
+# the repo llama-server build paths via ps (NOT pgrep — the 700+ char command
+# line exceeds pgrep's scan limit; ps -ww prints the full command line so the
+# anchored vendor-path patterns cannot hit unrelated llama-server processes).
+if kill_pids_by list_pids_by_repo_cmd 5; then
+  echo "✓ stopped llama-server processes"
+else
   exit 1
 fi
-
-echo "✓ stopped llama-server processes and compaction proxy"

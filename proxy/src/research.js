@@ -62,8 +62,11 @@ export async function fetchPage(url, { logger } = {}) {
       .replace(/<style[\s\S]*?<\/style>/gi, " ")
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, FETCH_CHARS);
+      .trim();
+    if (text.length > FETCH_CHARS) {
+      logger?.warn?.({ url, total_chars: text.length, retained_chars: FETCH_CHARS }, "research preview truncated; use source collection for complete evidence");
+      return text.slice(0, FETCH_CHARS) + `\n[TRUNCATED: ${FETCH_CHARS}/${text.length} characters; collect the source before handoff]`;
+    }
     return text.length > 200 ? text : null;
   } catch {
     return null;

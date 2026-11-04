@@ -6,6 +6,7 @@
 #         WATCH_INTERVAL=5 ./scripts/info.sh --watch
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$REPO/scripts/_common.sh"   # provides PORT, PORT_BASELINE, PORT_PROXY, PORT_LAYA
 
 # ── tput-safe color helpers ──────────────────────────────────────────────────
 if [[ -t 1 ]]; then
@@ -99,7 +100,7 @@ draw() {
 
   # ── SERVERS ────────────────────────────────────────────────────────────
   hdr "SERVERS"
-  for entry in "10501:Qwen3.8 full runtime" "10500:Qwen3.8 baseline"; do
+  for entry in "$PORT:Qwen3.8 full runtime" "$PORT_BASELINE:Qwen3.8 baseline"; do
     local port="${entry%%:*}" label="${entry#*:}"
     if curl -sf --max-time 1 "http://127.0.0.1:$port/health" >/dev/null 2>&1; then
       local pid; pid=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | head -1)
@@ -110,7 +111,7 @@ draw() {
   done
 
   # ── ACTIVE SERVER (turboquant primary) ─────────────────────────────────
-  local active_port=10501
+  local active_port=$PORT
   if curl -sf --max-time 1 "http://127.0.0.1:$active_port/health" >/dev/null 2>&1; then
     hdr "ACTIVE SERVER (:$active_port)"
 
@@ -151,7 +152,7 @@ draw() {
     fi
   else
     hdr "ACTIVE SERVER"
-    printf "  ${C_RED}● no server up on :10501 — try 'make start'${C_R}\n"
+    printf "  ${C_RED}● no server up on :$PORT — try 'make start'${C_R}\n"
   fi
 
   # ── PROCESS / MEMORY ───────────────────────────────────────────────────

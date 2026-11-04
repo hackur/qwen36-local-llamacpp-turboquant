@@ -72,6 +72,28 @@ async function main() {
     logger.info(
       `listening on http://${config.listen.host}:${config.listen.port}`,
     );
+
+    // Liveness ping: one cheap GET /health against the upstream per minute so
+    // a `tail -f` shows the proxy is alive and the llama-server is reachable,
+    // even when no chat traffic is flowing.
+    const ping = async () => {
+      const t0 = Date.now();
+      try {
+        const r = await fetch(`${config.upstream.base_url}/health`, { signal: AbortSignal.timeout(2000) });
+        logger.info(
+          { status: r.status, ms: Date.now() - t0 },
+          "upstream health ping ok",
+        );
+      } catch (err) {
+        logger.warn(
+          { err: err.message, ms: Date.now() - t0 },
+          "upstream health ping FAILED",
+        );
+      }
+    };
+    const pingTimer = setInterval(ping, 60_000);
+    pingTimer.unref();
+    ping();
   });
 
   const shutdown = (sig) => {

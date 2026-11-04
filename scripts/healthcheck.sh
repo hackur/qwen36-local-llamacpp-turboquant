@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Smoke-test a running llama-server. Default port 10501 (turboquant).
 set -euo pipefail
-PORT="${1:-10501}"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$REPO/scripts/_common.sh"   # provides PORT as the default
+PORT="${1:-$PORT}"
 URL="http://127.0.0.1:$PORT"
 
 echo "── $URL/health ──"

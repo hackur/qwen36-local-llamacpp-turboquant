@@ -17,7 +17,7 @@ benchmarks, and examples use that identifier consistently.
 
 The optional Node proxy listens on `http://127.0.0.1:11500` only after
 `make proxy-start`. It forwards other paths and adds `GET /proxy/info`. Its
-default `passthrough` mode does not compact requests; `shadow` measures a
+default `shadow` mode measures a
 rewrite, and `enforce` forwards it. API clients using `:10501` bypass it.
 `GET /proxy/info` also reports whether the optional JEV classifier gate is
 configured; it does not report classifier service health.

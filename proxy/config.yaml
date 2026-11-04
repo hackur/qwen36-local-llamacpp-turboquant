@@ -1,7 +1,6 @@
 # Qwen3.8 compaction proxy configuration.
 #
-# The checked-in mode is passthrough. Shadow and enforce compaction paths are
-# implemented but must be selected explicitly.
+# Shadow computes and logs the Laya-assisted rewrite and forwards the original.
 
 # Address the proxy listens on. See docs/compaction-strategy.md.
 listen:
@@ -19,7 +18,7 @@ upstream:
 #   shadow      — compute the rewrite, log it, forward the ORIGINAL upstream.
 #   enforce     — compute the rewrite, forward the REWRITTEN body upstream.
 # `x-compact: off` request header bypasses everything in any mode.
-mode: "passthrough"
+mode: "shadow"
 
 # Watermarks. Tier 0 verbatim window + Tier 1 elision read these.
 watermarks:
@@ -97,9 +96,34 @@ hooks:
 # Optional Jev compaction decision. rewrite.js calls this only when local_url
 # is set; an empty value leaves the ordinary thresholds unchanged. A configured
 # local endpoint may use the TypeSafe cloud fallback when credentials exist.
-# Set local_url to http://127.0.0.1:8000 for laya-serve.
+# Start the local classifier with make laya-start.
 # mode: local-first | cloud-first | parallel-race | local-only | cloud-only
 jev:
-  local_url: ""
-  mode: "local-first"
+  local_url: "http://127.0.0.1:18000"
+  model: "typed-decisions"
+  mode: "local-only"
   timeout_ms: 1500
+
+# Phase 7 — Laya-predicted tool-set routing. The same classifier pass that
+# picks the compact route also answers "which tool set should be in context
+# for this question?". When the choice matches a label below with confidence
+# >= confidence (or is `all`), enforce mode forwards the request with only
+# that set's tools, giving a capable but direction-seeking model a shorter,
+# clearer tool surface. Shadow mode logs the decision and forwards unchanged.
+# Any low-confidence, unknown-label, error, or empty-taxonomy case falls back
+# to the original full tool list. Labels may map to a list of tool names or
+# the string `all` (never filter).
+tool_filter:
+  mode: "shadow"           # shadow | enforce | off
+  confidence: 0.6
+  local_url: "http://127.0.0.1:18000"   # empty = reuse jev.local_url
+  model: "typed-decisions"    # empty = reuse jev.model
+  timeout_ms: 300
+  # Label -> list of tool names to keep (or the string "all" = never filter).
+  # Tune these to the harness's actual tool names. Labels unknown to the
+  # classifier simply never pass the gate.
+  taxonomy:
+    search: ["Read", "Grep", "Glob"]
+    edit: ["Edit", "Write", "MultiEdit"]
+    shell: ["Bash"]
+    browse: ["Fetch", "WebSearch"]

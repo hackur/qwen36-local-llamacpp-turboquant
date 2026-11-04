@@ -21,7 +21,7 @@ curl http://127.0.0.1:11500/v1/chat/completions \
 ```
 
 Configuration is in `proxy/config.yaml`. Main modes are `passthrough`,
-`shadow`, and `enforce`. The checked-in default is `passthrough`, so no
+`shadow`, and `enforce`. The checked-in default is `shadow`, so no
 compaction is applied. `shadow` computes and logs a rewrite while forwarding
 the original; `enforce` forwards the rewrite. `x-compact: off` bypasses
 rewriting per request. `GET /proxy/info` reports the running configuration.
@@ -36,16 +36,23 @@ The proxy supports:
 - structured-note and extractive fallbacks;
 - session keys and TTL state;
 - request-phase hooks;
-- JSONL telemetry and watermark analysis.
+- JSONL telemetry and watermark analysis;
+- Laya tool-set routing (`tool_filter`): the classifier's predicted tool set
+  trims the forwarded tools list in `enforce` mode and is only recorded in
+  telemetry in the checked-in `shadow` mode; see [Laya setup](laya.md).
 
-The checked-in summarizer, structured notes, session state, hooks, and JEV
-classifier gate are disabled. Set `jev.local_url` to a running Laya-compatible
-`/v1/systemone` service to enable classification during a rewrite. In
+The checked-in summarizer, structured notes, session state, and hooks are
+disabled. The classifier gate points to the local Laya typed-decisions service
+on `:18000`, in `local-only` mode. Start it with `make laya-start`; see
+[Laya setup](laya.md). Its `/v1/systemone` API classifies during a rewrite. In
 `local-first` mode, a failed local call can fall back to TypeSafe cloud only
 when its API key is available. The response includes route, thinking, and risk
 signals; the current rewrite path uses only `route=compact` with confidence
 at least 0.6 to keep fewer recent turns and lower the tool-result elision
-threshold. If classification fails, ordinary thresholds apply. `passthrough`
+threshold. When `tool_filter` is configured, that same single classifier pass
+also answers the `toolset` question; see the `tool_filter` section of
+`proxy/config.yaml` and [Laya setup](laya.md). If classification fails,
+ordinary thresholds apply and the full tool list is forwarded. `passthrough`
 does not run the rewrite or its classifier; `shadow` measures a candidate but
 forwards the original; only `enforce` forwards the compacted request.
 

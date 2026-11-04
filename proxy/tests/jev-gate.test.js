@@ -29,7 +29,8 @@ function history() {
   return m;
 }
 test("RED: jev compact forces frequent elision under watermark", async (t) => {
-  const { server, port } = await stubJev((_, r) => {
+  const { server, port } = await stubJev((body, r) => {
+    assert.equal(body.model, "typed-decisions");
     r.writeHead(200, { "content-type": "application/json" });
     r.end(JSON.stringify({ answers: { needs_thinking: { noul: 0.4 }, route: { choice: "compact", confidence: 0.85 }, risk: { score: 0 } } }));
   });
@@ -37,7 +38,7 @@ test("RED: jev compact forces frequent elision under watermark", async (t) => {
   const cacheDir = mkdtempSync(resolve(tmpdir(), "jevgate-"));
   const r = await rewriteRequest({
     body: { model: "s", messages: history() }, tokenizer: makeDemoTokenizer(), cacheDir, nCtx: 1000000,
-    config: { watermarks: { prompt_fraction: 0.9, tool_result_min_tokens: 5000, max_messages: 100, max_age_turns: 50, verbatim_keep_turns: 8, verbatim_keep_tokens: 8000 }, jev: { local_url: `http://127.0.0.1:${port}`, mode: "local-only", timeout_ms: 1500 } },
+    config: { watermarks: { prompt_fraction: 0.9, tool_result_min_tokens: 5000, max_messages: 100, max_age_turns: 50, verbatim_keep_turns: 8, verbatim_keep_tokens: 8000 }, jev: { local_url: `http://127.0.0.1:${port}`, model: "typed-decisions", mode: "local-only", timeout_ms: 1500 } },
   });
   function makeDemoTokenizer() { return makeTokenizer(); }
   assert.ok(r.stats.elided_tool_result_ids.length >= 3, `expected jev-forced elision, got ${r.stats.elided_tool_result_ids.length}`);

@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# Shared Qwen3.8 runtime helpers. This project intentionally supports one
-# model family and one canonical pair of GGUF artifacts.
+# Shared primary-runtime helpers. Model-specific defaults belong in profiles;
+# independent experiments do not inherit Qwen-specific feature flags.
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Source runtime.env once; a re-source is harmless (all values use := defaults).
+if [[ ! -f "$REPO/configs/runtime.env" ]]; then
+  echo "error: $REPO/configs/runtime.env not found" >&2
+  return 1 2>/dev/null || exit 1
+fi
 source "$REPO/configs/runtime.env"
 
 MODEL_FILE="${MODEL_FILE:-$REPO/models/qwen38-27b.gguf}"
-MMPROJ_FILE="${MMPROJ_FILE:-$REPO/models/qwen38-27b.mmproj.gguf}"
+MMPROJ_FILE="${MMPROJ_FILE-$REPO/models/qwen38-27b.mmproj.gguf}"
 TURBOQUANT_BIN="${TURBOQUANT_BIN:-$REPO/vendor/llama-cpp-turboquant/build/bin/llama-server}"
 MAINLINE_BIN="${MAINLINE_BIN:-$REPO/vendor/llama.cpp-mainline/build/bin/llama-server}"
 
@@ -35,8 +40,9 @@ ensure_executable() {
 }
 
 ensure_artifacts() {
-  [[ -f "$MODEL_FILE" ]] || die "Qwen3.8 weights missing: $MODEL_FILE (run: make model-link)"
-  [[ -f "$MMPROJ_FILE" ]] || die "Qwen3.8 projector missing: $MMPROJ_FILE (run: make model-link)"
+  [[ -f "$MODEL_FILE" ]] || die "model weights missing: $MODEL_FILE (run: make model-link or set MODEL_FILE)"
+  # The vision projector is optional: text-only runs set MMPROJ_FILE="".
+  [[ -z "$MMPROJ_FILE" || -f "$MMPROJ_FILE" ]] || die "projector missing: $MMPROJ_FILE (run: make model-link or set MMPROJ_FILE)"
 }
 
 ensure_port_free() {
@@ -70,8 +76,6 @@ append_runtime_features() {
 
   RUNTIME_FLAGS=(
     -m "$MODEL_FILE"
-    --mmproj "$MMPROJ_FILE"
-    --image-min-tokens "$IMAGE_MIN_TOKENS"
     --port "$PORT"
     --host 127.0.0.1
     --cors-origins localhost
@@ -117,6 +121,16 @@ append_runtime_features() {
     )
   fi
 
+  # Vision is only wired when a projector artifact is configured. Text-only
+  # model profiles leave MMPROJ_FILE empty and the server runs without
+  # multimodal input; --image-min-tokens is meaningless in that case.
+  if [[ -n "$MMPROJ_FILE" ]]; then
+    RUNTIME_FLAGS+=(
+      --mmproj "$MMPROJ_FILE"
+      --image-min-tokens "$IMAGE_MIN_TOKENS"
+    )
+  fi
+
   if [[ -n "$ROPE_SCALING" ]]; then
     [[ -n "$ROPE_SCALE" ]] || die "ROPE_SCALE is required when ROPE_SCALING is set"
     RUNTIME_FLAGS+=(
@@ -140,9 +154,85 @@ preflight_memory() {
   local total_bytes model_bytes projector_bytes minimum_bytes
   total_bytes="$(sysctl -n hw.memsize)"
   model_bytes="$(stat -f %z "$MODEL_FILE")"
-  projector_bytes="$(stat -f %z "$MMPROJ_FILE")"
+  projector_bytes=0
+  [[ -n "$MMPROJ_FILE" ]] && projector_bytes="$(stat -f %z "$MMPROJ_FILE")"
   minimum_bytes=$((model_bytes + projector_bytes + 8 * 1024 * 1024 * 1024))
-  (( total_bytes >= minimum_bytes )) || die "insufficient unified memory for Qwen3.8 Q8_0 + projector"
+  (( total_bytes >= minimum_bytes )) || die "insufficient unified memory for $MODEL_FILE + projector"
+}
+
+# wait_for_health <port> [timeout_s=180] [path=/health]
+# Poll http://127.0.0.1:<port><path> until it returns HTTP 200 or the timeout
+# elapses. Returns 0 on healthy, 1 on timeout. Single canonical readiness wait
+# so callers (switch-model.sh, service.sh, Makefile start, proxy.sh) stop each
+# implementing their own loop with a different timeout/success criterion.
+wait_for_health() {
+  local port="$1" timeout_s="${2:-180}" path="${3:-/health}"
+  local deadline=$(( $(date +%s) + timeout_s ))
+  while (( $(date +%s) < deadline )); do
+    if curl -sf --max-time 2 "http://127.0.0.1:${port}${path}" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 3
+  done
+  return 1
+}
+
+# Shared two-phase kill loop (SIGTERM, wait, SIGKILL stragglers, re-scan in a
+# bounded loop, then verify). $1 = a function name that prints the pids to kill
+# (one per line; empty output means "none left"). Echoes what it did; returns 1
+# if anything survived the final pass. stop-proxy.sh and stop-all.sh both call
+# this so the kill discipline lives in exactly one place.
+kill_pids_by() {
+  local lister="$1" max_passes="${2:-5}" pids=() pid cmd found_any=0
+  for ((pass=1; pass<=max_passes; pass++)); do
+    pids=()
+    while IFS= read -r pid; do [[ -n "$pid" ]] && pids+=("$pid"); done < <("$lister")
+    (( ${#pids[@]} == 0 )) && break
+    found_any=1
+    for pid in "${pids[@]}"; do
+      cmd="$(ps -p "$pid" -o command= 2>/dev/null | head -c 120)"
+      echo "  [pass $pass] kill $pid : $cmd"
+      kill "$pid" 2>/dev/null || true
+    done
+    sleep 2
+    for pid in "${pids[@]}"; do
+      if kill -0 "$pid" 2>/dev/null; then
+        echo "  [pass $pass] SIGKILL $pid (didn't exit gracefully)"
+        kill -9 "$pid" 2>/dev/null || true
+      fi
+    done
+  done
+  if (( found_any == 0 )); then
+    echo "  (no matching processes were running)"
+    return 0
+  fi
+  local remaining=()
+  while IFS= read -r pid; do [[ -n "$pid" ]] && remaining+=("$pid"); done < <("$lister")
+  if (( ${#remaining[@]} > 0 )); then
+    echo "❌ survivors after $max_passes passes — investigate manually:" >&2
+    for pid in "${remaining[@]}"; do
+      ps -p "$pid" -o pid=,ppid=,command= 2>/dev/null >&2
+    done
+    return 1
+  fi
+  echo "  ✓ all stopped"
+  return 0
+}
+
+# list_pids_by_port <port> — pids listening on a TCP port, one per line.
+list_pids_by_port() {
+  lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null || true
+}
+
+# list_pids_by_repo_cmd — pids whose full command line mentions any of the repo
+# llama-server build paths. Uses ps (not pgrep) because the llama-server command
+# line exceeds pgrep's scan limit (see stop-all.sh).
+list_pids_by_repo_cmd() {
+  local repo="$REPO"
+  /bin/ps -axww -o pid=,command= | awk -v repo="$repo" '
+    index($0, repo "/vendor/llama.cpp-mainline/build/bin/llama-server")     { print $1 }
+    index($0, repo "/vendor/llama-cpp-turboquant/build/bin/llama-server")    { print $1 }
+  ' | sort -u
 }
 
 log_stamp() {

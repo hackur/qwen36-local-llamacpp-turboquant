@@ -21,12 +21,13 @@ const Q = (extra = {}) => ({
   route: { type: "choice", instructions: "Pick handler", criteria: { local_direct: "lookup", local_think: "reason", compact: "summarize" }, ...extra },
 });
 test("1 local-first billing triage hits local, no cloud", async (t) => {
-  const { server, port } = await stub((_, r) => {
+  const { server, port } = await stub((body, r) => {
+    assert.equal(body.model, "typed-decisions");
     r.writeHead(200, { "content-type": "application/json" });
     r.end(JSON.stringify({ answers: { route: { choice: "local_direct", confidence: 0.94 } } }));
   });
   t.after(() => new Promise((r) => server.close(() => r())));
-  const out = await jevEvaluate({ subject: "Duplicate charge #4411" }, Q(), { localUrl: `http://127.0.0.1:${port}`, mode: "local-first", timeoutMs: 2000 });
+  const out = await jevEvaluate({ subject: "Duplicate charge #4411" }, Q(), { localUrl: `http://127.0.0.1:${port}`, model: "typed-decisions", mode: "local-first", timeoutMs: 2000 });
   assert.equal(out.answers.route.choice, "local_direct");
   assert.equal(out._source, "local");
 });

@@ -32,7 +32,8 @@ readable `MCP_CONFIG` file.
 
 Run `make status`. The compaction proxy is a separate process and needs
 `make proxy-start`; clients must send requests to `:11500`. Its default mode
-is `passthrough`. JEV classification also requires `jev.local_url` to point
+is `shadow`. Start the classifier with `make laya-start` and query
+`make laya-status`. JEV classification requires `jev.local_url` to point
 to a running Laya-compatible service. `GET /proxy/info` reports `mode` and
 `jev.enabled`. The demo script starts only fake classifier servers.
 

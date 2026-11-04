@@ -20,13 +20,24 @@ request. External MCP tools require `MCP_CONFIG`. Check the active set with:
 curl -s http://127.0.0.1:10501/tools | jq -r '.[].tool'
 ```
 
+`make restart [M=<profile>]` stops and restarts the model profile; the
+launchd-managed `qwen38` profile is the default (the launchd job owns the
+server process). `make switch M=<crow-9b|qwen38>` swaps profiles, and
+`scripts/switch-model.sh <profile> --with-proxy` also brings the compaction
+proxy back up against the new model alias.
+
 The independent context-compaction proxy starts with `make proxy-start` and
 listens on `:11500`. Clients must explicitly use that URL to pass through it.
-Its checked-in mode is `passthrough`; see [proxy](proxy.md) for `shadow` and
-`enforce` and the optional JEV/Laya classifier gate. `make status` shows the
+Its checked-in mode is `shadow` with local-only Laya classification; run
+`make laya-start` first. See [Laya](laya.md) and [proxy](proxy.md) for setup and
+`enforce` mode. `make status` shows the
 model and proxy listeners, plus the proxy mode and JEV gate when running.
 `make start-offline` removes llama.cpp agent tools and its WebUI MCP proxy; it
 does not start or stop the Node proxy.
+
+If the macOS login agent is registered, `make stop` stops that agent as well
+as this repository's model processes. Use `make service-start` to turn the
+registered agent back on. See [service controls](service.md).
 
 ## OpenAI-compatible text request
 

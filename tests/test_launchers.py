@@ -78,7 +78,10 @@ class LauncherDryRunTests(unittest.TestCase):
                 self.assertIn(value, output)
 
     def test_baseline_is_same_model_without_mtp_or_turboquant(self):
-        output = self.run_launcher("start-baseline.sh")
+        # Mirrors `make start-baseline`: the baseline port/ctx are passed in by
+        # the caller (the script's own defaults match, but the test pins the
+        # documented pair explicitly).
+        output = self.run_launcher("start-baseline.sh", PORT="10500", CTX="32768")
         self.assertIn("--port 10500", output)
         self.assertIn("--ctx-size 32768", output)
         self.assertIn("--cache-type-k f16 --cache-type-v f16", output)
@@ -86,6 +89,17 @@ class LauncherDryRunTests(unittest.TestCase):
         self.assertIn("--agent", output)
         self.assertNotIn("--spec-type", output)
         self.assertNotIn("turbo3", output)
+
+    def test_text_only_profile_does_not_load_primary_projector(self):
+        output = self.run_launcher("start-turboquant.sh", MMPROJ_FILE="", MTP="0")
+        self.assertNotIn("--mmproj", output)
+        self.assertNotIn("--image-min-tokens", output)
+        self.assertNotIn("--spec-type", output)
+
+    def test_baseline_defaults_are_independent_of_primary(self):
+        output = self.run_launcher("start-baseline.sh")
+        self.assertIn("--port 10500", output)
+        self.assertIn("--ctx-size 32768", output)
 
     def test_offline_override_disables_agent_mode_only(self):
         output = self.run_launcher("start-turboquant.sh", AGENT="0")

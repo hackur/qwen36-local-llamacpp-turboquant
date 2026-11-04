@@ -1,7 +1,11 @@
 # Contributing
 
-This repository is intentionally Qwen3.8-only. Changes that add another model,
-fallback alias, sidecar model, or family-specific template are out of scope.
+This repository maintains the complete local model harness. New model
+profiles must record artifact provenance, runtime compatibility, reasoning
+and tool capabilities, bounded validation, and limitations. Keep model-specific
+flags isolated; preserve existing models, evidence and service settings.
+Follow [the harness contract](docs/agent-harness.md). Do not enable automatic
+routing or tool enforcement merely because an implementation exists.
 
 Before committing:
 

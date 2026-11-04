@@ -1,7 +1,9 @@
 vendor/
 logs/
-models/
+/models/
 snapshots/
+data/
+
 benchmarks/results-*.json
 benchmarks/mem-*.csv
 benchmarks/quality-*/
@@ -9,6 +11,7 @@ benchmarks/quality-*/
 .DS_Store
 .venv/
 __pycache__/
+.mypy_cache/
 
 # Editor / OS
 .cursor/
@@ -24,6 +27,12 @@ __pycache__/
 .ssh/
 secrets/
 proxy/eval/ab-harness/out/
+
+# Personal config/conversation exports — never commit
+# Personal opencode agent config (the shared version is configs/opencode.json)
+/opencode.json
+configs/*_conversations.zip
+configs/llama_settings_*.json
 benchmarks/sweep-*.md
 benchmarks/sparse-v-ablation-*.md
 benchmarks/np-concurrency-*.md

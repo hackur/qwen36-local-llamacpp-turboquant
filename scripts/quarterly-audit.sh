@@ -22,6 +22,7 @@ case "${1:-}" in
 esac
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$REPO/scripts/_common.sh"   # provides PORT_PROXY
 cd "$REPO"
 
 mkdir -p "$REPO/logs"
@@ -58,9 +59,9 @@ else
 fi
 
 # Compaction proxy (:11500), if running
-PROXY_PID="$(lsof -nP -iTCP:11500 -sTCP:LISTEN -t 2>/dev/null | head -1 || true)"
+PROXY_PID="$(lsof -nP -iTCP:$PORT_PROXY -sTCP:LISTEN -t 2>/dev/null | head -1 || true)"
 if [[ -n "$PROXY_PID" ]]; then
-  log "compaction proxy PID=$PROXY_PID on :11500 — checking sockets"
+  log "compaction proxy PID=$PROXY_PID on :$PORT_PROXY — checking sockets"
   non_local="$(lsof -nP -p "$PROXY_PID" 2>/dev/null | grep -E 'TCP|UDP' | grep -vE '127\.0\.0\.1|\[::1\]' || true)"
   if [[ -z "$non_local" ]]; then
     log "  PASS: proxy has zero non-localhost sockets"
@@ -70,7 +71,7 @@ if [[ -n "$PROXY_PID" ]]; then
     fail=1
   fi
 else
-  log "compaction proxy not running on :11500 — skipping"
+  log "compaction proxy not running on :$PORT_PROXY — skipping"
 fi
 
 # -----------------------------------------------------------------------------

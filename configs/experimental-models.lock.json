@@ -1,0 +1,31 @@
+{
+  "researched_at": "2026-11-03",
+  "lfm3": {
+    "repository": "LiquidAI/LFM3-1.7B-GGUF",
+    "revision": "b3f2ae5d73cd3c91bf40e8ba752c648aa05dffdf",
+    "destination": "models/experimental/LFM3-1.7B-Q8_0.gguf",
+    "url": "https://huggingface.co/LiquidAI/LFM3-1.7B-GGUF/resolve/b3f2ae5d73cd3c91bf40e8ba752c648aa05dffdf/LFM3-1.7B-Q8_0.gguf",
+    "bytes": 1846238496,
+    "sha256": "8f6b24182258205e9e01e21f1f24a1f208c1e8115578825d202ce39976af20b6",
+    "license": "LFM Open License v1.0"
+  },
+  "runtime": {
+    "release": "b11960",
+    "semantic_release": "v0.8.0",
+    "commit": "8642541b255bfb5dc39cd351a178be09013a55d6",
+    "destination": "vendor/llama.cpp-lfm3/bin",
+    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11960/llama-b11960-bin-macos-arm64.tar.gz",
+    "bytes": 16465074,
+    "sha256": "58e5a5e1d7c2bf66cedd9c29e0323f3e570660a70a1e2156d32eed08f4cc1e3c",
+    "license": "MIT"
+  },
+  "qwen": {
+    "download": false,
+    "source_root": "~/.lmstudio/models",
+    "profiles": [
+      "crow-9b",
+      "mimo-9b",
+      "journalist-9b"
+    ]
+  }
+}

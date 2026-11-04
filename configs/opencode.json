@@ -11,6 +11,26 @@
           "limit": { "context": 262144, "output": 32768 }
         }
       }
+    },
+    "qwen38-proxy": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Qwen3.8 local · via compaction proxy :11500 (Laya shadow)",
+      "options": { "baseURL": "http://127.0.0.1:11500/v1" },
+      "models": {
+        "qwen3.8-local": {
+          "name": "Qwen3.8-27B Q8_0 through the compaction proxy",
+          "limit": { "context": 262144, "output": 32768 }
+        }
+      }
+    }
+  },
+  "agent": {
+    "proxy-soak": {
+      "mode": "subagent",
+      "description": "Soak worker that runs Qwen3.8 THROUGH the compaction proxy on :11500 (Laya shadow mode). Dispatch it for real tool-carrying agent traffic to accumulate tool_filter telemetry in the proxy JSONL logs.",
+      "model": "qwen38-proxy/qwen3.8-local",
+      "prompt": "You are a soak-test worker for the local Qwen3.8 compaction proxy. Complete the assigned task using your tools (search, read files, run commands, edit when asked). Work normally; never mention the proxy, the classifier, or telemetry.",
+      "permission": { "*": "allow" }
     }
   },
   "model": "qwen38-local/qwen3.8-local",

@@ -5,7 +5,11 @@
   <key>Label</key>           <string>com.local.qwen3-8.turboquant</string>
   <key>ProgramArguments</key>
   <array>
+    <!-- `foreground` makes start-turboquant.sh exec llama-server as its direct
+         child (no pipeline/tee), so this job's PID is the server itself and
+         launchd owns its full lifecycle. -->
     <string>__REPO__/scripts/start-turboquant.sh</string>
+    <string>foreground</string>
   </array>
   <key>RunAtLoad</key>       <true/>
   <key>KeepAlive</key>       <true/>
@@ -18,15 +22,4 @@
 </dict>
 </plist>
 
-<!--
-Placeholders:
-  __REPO__   absolute path to this repository checkout
-
-Install:
-  sed "s|__REPO__|$(pwd)|g" configs/launchd-plist.template > ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
-  launchctl load ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
-
-Uninstall:
-  launchctl unload ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
-  rm ~/Library/LaunchAgents/com.local.qwen3-8.turboquant.plist
--->
+<!-- __REPO__ is replaced by scripts/service.sh register. See docs/service.md. -->

@@ -129,6 +129,13 @@ export function createProxyServer({
   const hookEngine = hooks || NULL_HOOKS;
   const upstreamUrl = config.upstream.base_url.replace(/\/+$/, "");
 
+  // Observability tunables (not config-file driven on purpose — these are
+  // logging knobs, not behavior knobs). Heartbeat: emit a line every
+  // HEARTBEAT_CHUNKS upstream chunks during the stream phase so a
+  // `tail -f` shows tokens flowing; also never more often than HEARTBEAT_MIN_MS.
+  const HEARTBEAT_CHUNKS = 50;
+  const HEARTBEAT_MIN_MS = 10_000;
+
   // Phase 3 — session store. Always constructed so logging/tests can introspect
   // it, but only consulted when `config.session.enabled` is true. Stubs do no
   // I/O when `slot_endpoint_base` is empty.
@@ -159,6 +166,18 @@ export function createProxyServer({
     const messageCount = Array.isArray(parsed?.messages)
       ? parsed.messages.length
       : null;
+
+    logger.info(
+      {
+        requestId,
+        model,
+        messages: messageCount,
+        stream: isStreaming,
+        compact: compactHeader === "off" ? "off" : "on",
+        body_bytes: body.length,
+      },
+      "request received",
+    );
 
     // Hook context — allocated lazily only when at least one phase is wired.
     // Empty-registry guard preserves byte-identity (no allocation, no dispatch).
@@ -301,6 +320,18 @@ export function createProxyServer({
         rewrite = null;
       }
     }
+    if (rewrite) {
+      logger.info(
+        {
+          requestId,
+          orig_tokens: rewrite.stats.orig_tokens,
+          rewritten_tokens: rewrite.stats.rewritten_tokens,
+          elided: (rewrite.stats.elided_tool_result_ids || []).length,
+          jev_route: rewrite.stats.jev_route ?? null,
+        },
+        "rewrite decision",
+      );
+    }
 
     // request:after-rewrite — observation + tagging on rewrite output.
     if (hookCtx && hookEngine.hasHooksFor("request:after-rewrite")) {
@@ -370,6 +401,7 @@ export function createProxyServer({
           orig_tokens: rewrite.stats.orig_tokens,
           rewritten_tokens: rewrite.stats.rewritten_tokens,
           elided_ids: rewrite.stats.elided_tool_result_ids,
+          tool_filter: rewrite.stats.tool_filter ?? null,
         },
         "shadow rewrite (not forwarded)",
       );
@@ -452,10 +484,34 @@ export function createProxyServer({
     let sniffBuf = "";
     const SNIFF_MAX = 64 * 1024;
 
+    let firstChunkMs = null;
+    let chunkCount = 0;
+    let streamBytes = 0;
+    let lastHeartbeatMs = Date.now();
+
     try {
       for await (const chunk of upstreamRes.body) {
         // chunk is Uint8Array. Write through unchanged.
         res.write(chunk);
+        chunkCount++;
+        streamBytes += chunk.length;
+        const now = Date.now();
+        if (firstChunkMs === null) {
+          firstChunkMs = now - start;
+          logger.info(
+            { requestId, ttfb_ms: firstChunkMs, status: upstreamRes.status },
+            "upstream first byte",
+          );
+        } else if (
+          chunkCount % HEARTBEAT_CHUNKS === 0 &&
+          now - lastHeartbeatMs >= HEARTBEAT_MIN_MS
+        ) {
+          lastHeartbeatMs = now;
+          logger.info(
+            { requestId, chunks: chunkCount, bytes: streamBytes, elapsed_ms: now - start },
+            "stream alive",
+          );
+        }
         if (sniffBuf.length < SNIFF_MAX) {
           sniffBuf += Buffer.from(chunk).toString("utf8");
           if (sniffBuf.length > SNIFF_MAX) {
@@ -511,6 +567,9 @@ export function createProxyServer({
             orig_tokens: rewrite.stats.orig_tokens,
             rewritten_tokens: rewrite.stats.rewritten_tokens,
             elided_ids: rewrite.stats.elided_tool_result_ids,
+            jev_route: rewrite.stats.jev_route,
+            jev_confidence: rewrite.stats.jev_confidence,
+            tool_filter: rewrite.stats.tool_filter ?? null,
           }
         : null,
       phantom_answered: phantomAnswered,
@@ -530,7 +589,7 @@ export function createProxyServer({
         .reduce((a, b) => a + b, 0);
     }
     jsonl.write(record);
-    logger.debug(record, "request complete");
+    logger.info(record, "request complete");
   }
 
   async function handlePassthrough(req, res, requestId) {
@@ -577,6 +636,8 @@ export function createProxyServer({
       jev: {
         enabled: Boolean(config.jev?.local_url),
         mode: config.jev?.mode ?? "local-first",
+        model: config.jev?.model ?? null,
+        local_url: config.jev?.local_url ?? "",
       },
     };
     res.writeHead(200, { "content-type": "application/json" });
@@ -585,8 +646,28 @@ export function createProxyServer({
 
   const server = createServer((req, res) => {
     const requestId = randomUUID();
+    const reqStart = Date.now();
+    let bytesWritten = 0;
+    res.write = ((orig) => function (data, ...rest) {
+      if (data) bytesWritten += Buffer.byteLength(data);
+      return orig.call(this, data, ...rest);
+    })(res.write);
     res.on("close", () => {
-      // nothing to clean up; here for future hooks
+      if (!res.writableEnded) {
+        // Client went away mid-stream (opencode cancel, network drop).
+        // Distinguishes "client gave up" from "proxy is stuck": if this
+        // fires while "stream alive" heartbeats are still arriving, the
+        // proxy is fine.
+        logger.warn(
+          {
+            requestId,
+            url: req.url,
+            elapsed_ms: Date.now() - reqStart,
+            bytes_written: bytesWritten,
+          },
+          "client disconnected before response complete",
+        );
+      }
     });
 
     const url = req.url || "/";
